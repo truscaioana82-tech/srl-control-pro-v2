@@ -36,6 +36,59 @@ def genera_numero_progressivo(df_all):
                 max_num = max(max_num, int(num_str))
     return f"{max_num + 1}/{anno_corrente}"
 
+def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telefono, descrizione, importo_val):
+    righe_html = ""
+    for riga in str(descrizione or "").strip().split("\n"):
+        if not riga.strip():
+            continue
+        parti = [p.strip() for p in riga.split("|")]
+        if len(parti) >= 4:
+            righe_html += f"<tr><td style='padding:6px;border:1px solid #d0d7de;'>{parti[0]}</td><td style='padding:6px;border:1px solid #d0d7de;text-align:center;'>{parti[1]}</td><td style='padding:6px;border:1px solid #d0d7de;text-align:right;'>{parti[2]}</td><td style='padding:6px;border:1px solid #d0d7de;text-align:right;'>{parti[3]}</td></tr>"
+        else:
+            righe_html += f"<tr><td style='padding:6px;border:1px solid #d0d7de;'>{riga.strip()}</td><td style='padding:6px;border:1px solid #d0d7de;text-align:center;'>-</td><td style='padding:6px;border:1px solid #d0d7de;text-align:right;'>-</td><td style='padding:6px;border:1px solid #d0d7de;text-align:right;'>-</td></tr>"
+
+    html = f"""
+    <div style="background:#ffffff;color:#111111;padding:20px;border:1px solid #d0d7de;border-radius:8px;font-family:sans-serif;">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1b2340;padding-bottom:10px;margin-bottom:14px;">
+            <div>
+                <div style="font-size:18px;font-weight:bold;color:#1b2340;">CARTONGESSO &amp; COLOR GROUP S.r.l.</div>
+                <div style="font-size:12px;color:#555555;">Opere in Cartongesso, Controsoffitti, Isolamenti e Tinteggiature</div>
+            </div>
+            <div style="background:#1b2340;color:#ffffff;padding:8px 14px;border-radius:4px;text-align:center;">
+                <div style="color:#f2b718;font-weight:bold;font-size:13px;">PREVENTIVO N. {num_doc}</div>
+                <div style="font-size:11px;">Data: {data_doc}</div>
+            </div>
+        </div>
+        <div style="background:#eef2f8;border-left:4px solid #f2b718;padding:8px 12px;margin-bottom:14px;font-size:13px;">
+            <strong style="color:#1b2340;font-size:11px;">SPETT.LE CLIENTE</strong><br/>
+            <strong>{cliente or '---'}</strong><br/>
+            {f'{indirizzo}<br/>' if indirizzo else ''}
+            {f'Tel: {telefono}' if telefono else ''}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;">
+            <thead>
+                <tr style="background:#1b2340;color:#ffffff;">
+                    <th style="padding:7px;text-align:left;">DESCRIZIONE LAVORAZIONI</th>
+                    <th style="padding:7px;text-align:center;">MISURE</th>
+                    <th style="padding:7px;text-align:right;">PREZZO UNIT.</th>
+                    <th style="padding:7px;text-align:right;">TOTALE</th>
+                </tr>
+            </thead>
+            <tbody>
+                {righe_html}
+                <tr>
+                    <td colspan="2"></td>
+                    <td style="background:#f2b718;color:#1b2340;font-weight:bold;padding:7px;text-align:right;">TOTALE (€)</td>
+                    <td style="background:#f2b718;color:#1b2340;font-weight:bold;padding:7px;text-align:right;">€ {float(importo_val or 0.0):,.2f}</td>
+                </tr>
+            </tbody>
+        </table>
+        <div style="font-size:11px;color:#444444;border-left:3px solid #1b2340;padding-left:8px;">
+            <strong>NOTE E CONDIZIONI:</strong> Gli importi indicati si intendono IVA esclusa ove applicabile. Validità offerta 30 giorni.
+        </div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
 def genera_pdf_bytes(row_dict, percorso_logo):
     buffer_pdf = io.BytesIO()
     num_doc = str(row_dict["num"])
@@ -264,12 +317,12 @@ def mostra_preventivi():
                 st.divider()
 
             if not df_filtrato.empty:
-                st.subheader("📄 Genera e Scarica PDF")
+                st.subheader("👁️ Anteprima e Stampa PDF")
                 opzioni_pdf = {
                     f"N° {r['num']} - {r['cliente']} (€ {float(r['importo']):,.2f})": r
                     for _, r in df_filtrato.iterrows()
                 }
-                scelta_pdf = st.selectbox("Seleziona preventivo da stampare:", list(opzioni_pdf.keys()))
+                scelta_pdf = st.selectbox("Seleziona preventivo:", list(opzioni_pdf.keys()))
                 riga_scelta = opzioni_pdf[scelta_pdf]
                 pdf_bytes = genera_pdf_bytes(riga_scelta, percorso_logo)
 
@@ -281,6 +334,16 @@ def mostra_preventivi():
                     type="primary"
                 )
 
+                with st.expander("👁️ Visualizza Anteprima Documento", expanded=True):
+                    renderizza_anteprima_preventivo(
+                        riga_scelta["num"],
+                        riga_scelta["data_doc"],
+                        riga_scelta["cliente"],
+                        riga_scelta.get("indirizzo"),
+                        riga_scelta.get("telefono"),
+                        riga_scelta.get("descrizione"),
+                        riga_scelta.get("importo")
+                    )
     with tab2:
         st.subheader("Compilazione Nuovo Preventivo")
         df_listino = carica_tabella("listino")
@@ -325,7 +388,15 @@ def mostra_preventivi():
             )
             importo = st.number_input("Importo Totale (€)", min_value=0.0, step=10.0, value=float(st.session_state.nuovo_imp))
 
-            if st.form_submit_button("💾 Salva Preventivo", type="primary"):
+            col_b1, col_b2 = st.columns(2)
+            btn_anteprima = col_b1.form_submit_button("👁️ Aggiorna Anteprima Bozza", use_container_width=True)
+            btn_salva = col_b2.form_submit_button("💾 Salva Preventivo", type="primary", use_container_width=True)
+
+            if btn_anteprima:
+                st.session_state.nuovo_desc = descrizione
+                st.session_state.nuovo_imp = importo
+
+            if btn_salva:
                 if not cliente.strip():
                     st.error("Inserisci il nome del cliente.")
                 else:
@@ -343,6 +414,12 @@ def mostra_preventivi():
                     st.session_state.nuovo_imp = 0.0
                     st.success("✅ Preventivo salvato su Cloud!")
                     st.rerun()
+
+        if st.session_state.nuovo_desc.strip():
+            with st.expander("👁️ Anteprima Bozza Preventivo", expanded=True):
+                renderizza_anteprima_preventivo(
+                    num_prev, data_prev.strftime("%d/%m/%Y"), cliente, indirizzo, telefono, descrizione, importo
+                )
     with tab3:
         st.subheader("Modifica o Elimina Preventivo")
         if df_all.empty:
@@ -414,11 +491,3 @@ def mostra_preventivi():
         if not df_listino.empty:
             st.dataframe(df_listino[["codice", "descrizione", "prezzo_unitario", "unita_misura"]], use_container_width=True, hide_index=True)
 
-           import fitz  # PyMuPDF
-
-def mostra_anteprima_pdf(pdf_bytes):
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    for i, page in enumerate(doc):
-        pix = page.get_pixmap(dpi=150)
-        st.image(pix.tobytes("png"), caption=f"Pagina {i + 1} di {len(doc)}", use_container_width=True)
-             
