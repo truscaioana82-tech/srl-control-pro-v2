@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
 from database import init_db, carica_tabella
 from fatture import mostra_prima_nota
 from stipendi import mostra_stipendi
@@ -7,6 +8,8 @@ from iva_f24 import mostra_iva, mostra_f24
 from scadenzario import mostra_scadenzario
 from grafici import mostra_grafici
 from import_export import mostra_import_export
+from rubrica import mostra_rubrica
+from report_pdf import genera_pdf_bilancio
 
 st.set_page_config(page_title="SRL Control Pro 2.0", page_icon="🏛️", layout="wide")
 
@@ -36,6 +39,7 @@ menu = st.sidebar.radio("Navigazione", [
     "📝 Prima Nota & Fatture",
     "⏳ Da Incassare / Pagare",
     "👥 Dipendenti & Stipendi",
+    "📇 Rubrica Clienti & Dipendenti",
     "🧾 Liquidazione IVA",
     "📅 Acconti & Scadenze F24",
     "📥 Importa / Esporta Excel"
@@ -57,7 +61,6 @@ periodo_scelto = st.sidebar.selectbox("Mese / Periodo", options=list(mesi_map.ke
 
 df_fatture = carica_tabella("fatture")
 df_stipendi = carica_tabella("stipendi")
-df_f24 = carica_tabella("f24")
 
 if anno_filtro != "Tutti" and not df_fatture.empty:
     df_fatture = df_fatture[df_fatture['data'].astype(str).str.startswith(anno_filtro)]
@@ -73,12 +76,11 @@ if mesi_target is not None:
 
 def calcola_scheda(df_f, df_s):
     if df_f.empty and df_s.empty:
-        return {"lordi": 0.0, "utile": 0.0, "fornitori": 0.0, "dipendenti": 0.0, "nc": 0.0, "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0, "ritenute": 0.0}
+        return {"lordi": 0.0, "utile": 0.0, "fornitori": 0.0, "dipendenti": 0.0, "nc": 0.0, "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0}
     
     t_up = df_f['tipo'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
     cat_up = df_f['costo_categoria'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
     
-    # Distinzione esatta delle voci come nella vecchia app
     is_nc = t_up.str.contains('CREDITO|NC', na=False)
     is_omaggio = t_up.str.contains('OMAGG', na=False)
     is_dip_vecchio = t_up.str.contains('STIPEND|DIPEND|BUSTA|PERSONALE', na=False) | cat_up.str.contains('STIPEND|DIPEND|PERSONALE', na=False)
@@ -115,6 +117,23 @@ if menu == "📊 Cruscotto & Bilancio":
     st.subheader(f"📊 Cruscotto SRL • {periodo_scelto} ({anno_filtro})")
     tot = calcola_scheda(df_fatture, df_stipendi)
     
+    df_f_b = df_fatture[df_fatture['socio'].astype(str).str.upper() == "BAGLI"] if not df_fatture.empty else pd.DataFrame()
+    df_s_b = df_stipendi[df_stipendi['socio'].astype(str).str.upper() == "BAGLI"] if not df_stipendi.empty else pd.DataFrame()
+    d_bagli = calcola_scheda(df_f_b, df_s_b)
+
+    df_f_t = df_fatture[df_fatture['socio'].astype(str).str.upper() == "TROPEA"] if not df_fatture.empty else pd.DataFrame()
+    df_s_t = df_stipendi[df_stipendi['socio'].astype(str).str.upper() == "TROPEA"] if not df_stipendi.empty else pd.DataFrame()
+    d_tropea = calcola_scheda(df_f_t, df_s_t)
+
+    pdf_bytes = genera_pdf_bilancio(periodo_scelto, anno_filtro, tot, d_bagli, d_tropea)
+    st.download_button(
+        label="📄 Scarica Bilancio in PDF",
+        data=pdf_bytes,
+        file_name=f"Bilancio_SRL_{anno_filtro}_{date.today()}.pdf",
+        mime="application/pdf",
+        type="primary"
+    )
+    
     c1, c2, c3 = st.columns(3)
     c1.metric("💰 Incassi Lordi SRL", f"€ {tot['lordi']:,.2f}")
     c2.metric("📈 Utile Netto SRL", f"€ {tot['utile']:,.2f}")
@@ -122,13 +141,9 @@ if menu == "📊 Cruscotto & Bilancio":
 
     st.divider()
     col_b, col_t = st.columns(2)
-    for socio, col in [("BAGLI", col_b), ("TROPEA", col_t)]:
+    for socio, d, col in [("BAGLI", d_bagli, col_b), ("TROPEA", d_tropea, col_t)]:
         with col:
             st.subheader(f"👤 Rendiconto: {socio}")
-            df_f_s = df_fatture[df_fatture['socio'].astype(str).str.upper() == socio] if not df_fatture.empty else pd.DataFrame()
-            df_s_s = df_stipendi[df_stipendi['socio'].astype(str).str.upper() == socio] if not df_stipendi.empty else pd.DataFrame()
-            d = calcola_scheda(df_f_s, df_s_s)
-            
             m1, m2 = st.columns(2)
             m1.metric("💰 Incassi Lordi", f"€ {d['lordi']:,.2f}")
             m2.metric("📈 Utile Netto", f"€ {d['utile']:,.2f}")
@@ -153,6 +168,9 @@ elif menu == "⏳ Da Incassare / Pagare":
 elif menu == "👥 Dipendenti & Stipendi":
     mostra_stipendi()
 
+elif menu == "📇 Rubrica Clienti & Dipendenti":
+    mostra_rubrica()
+
 elif menu == "🧾 Liquidazione IVA":
     mostra_iva(df_fatture)
 
@@ -161,5 +179,4 @@ elif menu == "📅 Acconti & Scadenze F24":
 
 elif menu == "📥 Importa / Esporta Excel":
     mostra_import_export()
-
 
