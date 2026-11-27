@@ -6,6 +6,7 @@ from fatture import mostra_prima_nota
 from stipendi import mostra_stipendi
 from iva_f24 import mostra_iva, mostra_f24
 from scadenzario import mostra_scadenzario
+from scadenze_mezzi import mostra_scadenze_mezzi
 from grafici import mostra_grafici
 from import_export import mostra_import_export
 from rubrica import mostra_rubrica
@@ -38,6 +39,7 @@ menu = st.sidebar.radio("Navigazione", [
     "📈 Grafici & Andamento",
     "📝 Prima Nota & Fatture",
     "⏳ Da Incassare / Pagare",
+    "🚛 Mezzi, Polizze & DURC",
     "👥 Dipendenti & Stipendi",
     "📇 Rubrica Clienti & Dipendenti",
     "🧾 Liquidazione IVA",
@@ -73,7 +75,6 @@ if mesi_target is not None:
         df_fatture = df_fatture[df_fatture['data'].astype(str).str.slice(5, 7).isin(mesi_target)]
     if not df_stipendi.empty:
         df_stipendi = df_stipendi[df_stipendi['data'].astype(str).str.slice(5, 7).isin(mesi_target)]
-
 def calcola_scheda(df_f, df_s):
     if df_f.empty and df_s.empty:
         return {"lordi": 0.0, "utile": 0.0, "fornitori": 0.0, "dipendenti": 0.0, "cassa_edile": 0.0, "nc": 0.0, "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0}
@@ -185,6 +186,9 @@ elif menu == "📝 Prima Nota & Fatture":
 
 elif menu == "⏳ Da Incassare / Pagare":
     mostra_scadenzario()
+
+elif menu == "🚛 Mezzi, Polizze & DURC":
+    mostra_scadenze_mezzi()
 
 elif menu == "👥 Dipendenti & Stipendi":
     mostra_stipendi()
