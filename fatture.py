@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import date
 from database import esegui_query, carica_tabella
+from rubrica import ottieni_nomi_rubrica
 
 def mostra_prima_nota():
     st.title("📝 Prima Nota & Registro Fatture")
@@ -34,7 +35,7 @@ def mostra_prima_nota():
                     with st.form("form_modifica"):
                         m1, m2 = st.columns(2)
                         nuova_data = m1.text_input("Data (AAAA-MM-GG)", value=str(riga["data"]))
-                        tipi = ("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA")
+                        tipi = ("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA", "NOTA DI CREDITO")
                         idx_t = tipi.index(riga["tipo"]) if riga["tipo"] in tipi else 0
                         nuovo_tipo = m2.selectbox("Tipo", options=tipi, index=idx_t)
                         
@@ -73,31 +74,35 @@ def mostra_prima_nota():
             st.warning("Nessun movimento registrato.")
 
     with tab2:
+        nomi_rubrica = ottieni_nomi_rubrica(["CLIENTE", "FORNITORE"])
         with st.form("nuova_fattura"):
             c1, c2, c3 = st.columns(3)
             data_doc = c1.date_input("Data", value=date.today())
-            tipo_doc = c2.selectbox("Tipo Documento", options=("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA"))
+            tipo_doc = c2.selectbox("Tipo Documento", options=("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA", "NOTA DI CREDITO"))
             num_doc = c3.text_input("Numero Documento (es. 71/2026)")
             
-            c4, c5, c6 = st.columns(3)
-            anagrafica = c4.text_input("Cliente / Fornitore")
-            imponibile = c5.number_input("Imponibile (€)", min_value=0.0, step=10.0)
-            iva_perc = c6.selectbox("IVA %", options=(22, 10, 5, 4, 0))
+            c4, c5 = st.columns(2)
+            anag_scelta = c4.selectbox("Scegli da Rubrica (oppure scrivi a destra)", options=["-- Scrivi nuovo nome --"] + nomi_rubrica)
+            anag_nuova = c5.text_input("Nuovo Cliente / Fornitore (se non in rubrica)")
             
-            c7, c8, c9 = st.columns(3)
-            socio = c7.selectbox("Socio", options=("BAGLI", "TROPEA", "COMUNE"))
-            ritenuta = c8.number_input("Ritenuta %", min_value=0.0, max_value=100.0, value=0.0)
-            categoria = c9.text_input("Categoria", value="Generale")
+            c6, c7, c8 = st.columns(3)
+            imponibile = c6.number_input("Imponibile (€)", min_value=0.0, step=10.0)
+            iva_perc = c7.selectbox("IVA %", options=(22, 10, 5, 4, 0))
+            socio = c8.selectbox("Socio", options=("BAGLI", "TROPEA", "COMUNE"))
             
-            if st.form_submit_button("➕ Registra Movimento"):
+            c9, c10 = st.columns(2)
+            ritenuta = c9.number_input("Ritenuta %", min_value=0.0, max_value=100.0, value=0.0)
+            categoria = c10.text_input("Categoria", value="Generale")
+            
+            if st.form_submit_button("➕ Registra Movimento", type="primary"):
+                anag_finale = anag_nuova.strip().upper() if anag_nuova.strip() else (anag_scelta if anag_scelta != "-- Scrivi nuovo nome --" else "")
                 esegui_query(
                     '''INSERT INTO fatture (data, tipo, num, anagrafica, imponibile, iva_perc, socio, ritenuta_perc, costo_categoria, pagata) 
                        VALUES (:d, :t, :n, :a, :i, :iv, :s, :r, :c, 1)''',
-                    {"d": str(data_doc), "t": tipo_doc, "n": num_doc, "a": anagrafica.upper(),
+                    {"d": str(data_doc), "t": tipo_doc, "n": num_doc, "a": anag_finale,
                      "i": imponibile, "iv": iva_perc, "s": socio, "r": ritenuta, "c": categoria}
                 )
                 st.success("✅ Registrazione inserita su Cloud!")
                 st.rerun()
-
 
 
