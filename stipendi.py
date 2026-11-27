@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from database import get_connection, carica_tabella, salva_tabella
+from database import esegui_query, carica_tabella, salva_tabella
 
 def mostra_stipendi():
     st.title("👥 Gestione Dipendenti & Stipendi")
@@ -19,16 +19,16 @@ def mostra_stipendi():
         aggiungi_f24 = st.checkbox("Invia automaticamente i contributi allo scadenzario F24", value=True)
         
         if st.form_submit_button("💾 Registra Stipendio"):
-            conn = get_connection()
-            c = conn.cursor()
-            c.execute("INSERT INTO stipendi (data, dipendente, mese, netto, contributi_f24, socio) VALUES (?,?,?,?,?,?)",
-                      (str(data_pag), dipendente.upper(), mese_comp, netto, contributi, socio_dip))
+            esegui_query(
+                "INSERT INTO stipendi (data, dipendente, mese, netto, contributi_f24, socio) VALUES (:d, :dip, :m, :n, :c, :s)",
+                {"d": str(data_pag), "dip": dipendente.upper(), "m": mese_comp, "n": netto, "c": contributi, "s": socio_dip}
+            )
             if aggiungi_f24 and contributi > 0:
-                c.execute("INSERT INTO f24 (scadenza, descrizione, importo, pagato) VALUES (?,?,?,0)",
-                          (str(data_pag), f"F24 Stipendio {dipendente.upper()} - {mese_comp}", contributi))
-            conn.commit()
-            conn.close()
-            st.success("✅ Stipendio registrato!")
+                esegui_query(
+                    "INSERT INTO f24 (scadenza, descrizione, importo, pagato) VALUES (:sc, :desc, :imp, 0)",
+                    {"sc": str(data_pag), "desc": f"F24 Stipendio {dipendente.upper()} - {mese_comp}", "imp": contributi}
+                )
+            st.success("✅ Stipendio registrato su Cloud!")
             st.rerun()
 
     st.subheader("Storico Stipendi (Modificabile)")
@@ -39,3 +39,4 @@ def mostra_stipendi():
             salva_tabella(ed_st, "stipendi")
             st.success("✅ Stipendi aggiornati!")
             st.rerun()
+
