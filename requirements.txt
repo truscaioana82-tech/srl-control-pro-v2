@@ -3,4 +3,4 @@ pandas
 openpyxl
 sqlalchemy
 psycopg[binary]
-
+reportlab
