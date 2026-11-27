@@ -32,8 +32,12 @@ def init_db():
             mese TEXT,
             netto DOUBLE PRECISION,
             contributi_f24 DOUBLE PRECISION,
+            cassa_edile DOUBLE PRECISION DEFAULT 0,
             socio TEXT
         )'''))
+        # Aggiunge automaticamente la colonna cassa_edile se la tabella esiste già
+        conn.execute(text('''ALTER TABLE stipendi_v2 ADD COLUMN IF NOT EXISTS cassa_edile DOUBLE PRECISION DEFAULT 0'''))
+        
         conn.execute(text('''CREATE TABLE IF NOT EXISTS f24_v2 (
             id SERIAL PRIMARY KEY,
             scadenza TEXT,
@@ -66,4 +70,5 @@ def salva_tabella(df, nome_tabella):
         df_to_save = df.drop(columns=["id"], errors="ignore")
         if not df_to_save.empty:
             df_to_save.to_sql(tabella_reale, conn, if_exists="append", index=False)
+
 
