@@ -35,7 +35,6 @@ def init_db():
             cassa_edile DOUBLE PRECISION DEFAULT 0,
             socio TEXT
         )'''))
-        # Aggiunge automaticamente la colonna cassa_edile se la tabella esiste già
         conn.execute(text('''ALTER TABLE stipendi_v2 ADD COLUMN IF NOT EXISTS cassa_edile DOUBLE PRECISION DEFAULT 0'''))
         
         conn.execute(text('''CREATE TABLE IF NOT EXISTS f24_v2 (
@@ -44,6 +43,17 @@ def init_db():
             descrizione TEXT,
             importo DOUBLE PRECISION,
             pagato INTEGER DEFAULT 0
+        )'''))
+
+        conn.execute(text('''CREATE TABLE IF NOT EXISTS scadenze_edili (
+            id SERIAL PRIMARY KEY,
+            scadenza TEXT,
+            categoria TEXT,
+            mezzo_riferimento TEXT,
+            descrizione TEXT,
+            importo DOUBLE PRECISION DEFAULT 0,
+            socio TEXT,
+            rinnovata INTEGER DEFAULT 0
         )'''))
 
 def _mappa_tabella(nome):
