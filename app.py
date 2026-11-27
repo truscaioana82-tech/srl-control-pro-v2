@@ -38,6 +38,7 @@ st.sidebar.caption("BAGLI & TROPEA • Cloud Condiviso 🟢")
 menu = st.sidebar.radio("Navigazione", [
     "📊 Cruscotto & Bilancio",
     "🏗️ Analisi Cantieri",
+    "📋 Preventivi",
     "📑 Estratto Conto Clienti/Forn.",
     "📈 Grafici & Andamento",
     "📝 Prima Nota & Fatture",
@@ -63,13 +64,6 @@ mesi_map = {
     "Ottobre": ["10"], "Novembre": ["11"], "Dicembre": ["12"]
 }
 periodo_scelto = st.sidebar.selectbox("Mese / Periodo", options=list(mesi_map.keys()))
-
-st.sidebar.divider()
-st.sidebar.link_button(
-    "📋 Apri Gestionale Preventivi",
-    "https://gestionale-preventivi-jrdkne6h5zzexy5m7yzxxn.streamlit.app/",
-    use_container_width=True
-)
 
 df_fatture = carica_tabella("fatture")
 df_stipendi = carica_tabella("stipendi")
@@ -201,6 +195,13 @@ if menu == "📊 Cruscotto & Bilancio":
 
 elif menu == "🏗️ Analisi Cantieri":
     mostra_cantieri(df_fatture, df_stipendi)
+
+elif menu == "📋 Preventivi":
+    st.components.v1.iframe(
+        "https://streamlit.app",
+        height=900,
+        scrolling=True
+    )
 
 elif menu == "📑 Estratto Conto Clienti/Forn.":
     mostra_estratto_conto(df_fatture)
