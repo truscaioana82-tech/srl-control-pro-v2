@@ -1,17 +1,15 @@
 import streamlit as st
 import pandas as pd
-import io
-from datetime import date
-from database import init_db, carica_tabella, get_engine
+from database import init_db, carica_tabella
 from fatture import mostra_prima_nota
 from stipendi import mostra_stipendi
 from iva_f24 import mostra_iva, mostra_f24
 from scadenzario import mostra_scadenzario
 from grafici import mostra_grafici
+from import_export import mostra_import_export
 
 st.set_page_config(page_title="SRL Control Pro 2.0", page_icon="🏛️", layout="wide")
 
-# --- CONTROLLO PASSWORD (legge APP_PASSWORD dai Secrets) ---
 def verifica_password():
     if "autenticato" not in st.session_state:
         st.session_state["autenticato"] = False
@@ -126,24 +124,5 @@ elif menu == "📅 Acconti & Scadenze F24":
     mostra_f24()
 
 elif menu == "📥 Importa / Esporta Excel":
-    st.title("📥 Backup & Migrazione Dati")
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        carica_tabella("fatture").to_excel(writer, sheet_name="Fatture", index=False)
-        carica_tabella("stipendi").to_excel(writer, sheet_name="Stipendi", index=False)
-        carica_tabella("f24").to_excel(writer, sheet_name="F24", index=False)
-    
-    st.download_button("📤 Scarica Backup Excel", data=buffer.getvalue(), file_name=f"Backup_SRL_{date.today()}.xlsx")
-    
-    st.divider()
-    uploaded = st.file_uploader("Importa fatture da Excel", type=["xlsx"])
-    if uploaded and st.button("📥 Carica nel Database Cloud"):
-        df_imp = pd.read_excel(uploaded)
-        colonne = ['data', 'tipo', 'num', 'anagrafica', 'imponibile', 'iva_perc', 'socio', 'ritenuta_perc', 'costo_categoria']
-        for col in colonne:
-            if col not in df_imp.columns:
-                df_imp[col] = str(date.today()) if col == 'data' else (0 if 'perc' in col or col == 'imponibile' else "GENERALE")
-        df_imp['pagata'] = 1
-        engine = get_engine()
-        df_imp[colonne + ['pagata']].to_sql("fatture", engine, if_exists="append", index=False)
-        st.success(f"✅ Importate {len(df_imp)} righe su Neon Cloud!")
+    mostra_import_export()
+
