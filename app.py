@@ -57,6 +57,7 @@ periodo_scelto = st.sidebar.selectbox("Mese / Periodo", options=list(mesi_map.ke
 
 df_fatture = carica_tabella("fatture")
 df_stipendi = carica_tabella("stipendi")
+df_f24 = carica_tabella("f24")
 
 if anno_filtro != "Tutti" and not df_fatture.empty:
     df_fatture = df_fatture[df_fatture['data'].astype(str).str.startswith(anno_filtro)]
@@ -70,43 +71,75 @@ if mesi_target is not None:
     if not df_stipendi.empty:
         df_stipendi = df_stipendi[df_stipendi['data'].astype(str).str.slice(5, 7).isin(mesi_target)]
 
+def calcola_scheda(df_f, df_s):
+    if df_f.empty and df_s.empty:
+        return {"lordi": 0.0, "utile": 0.0, "fornitori": 0.0, "dipendenti": 0.0, "nc": 0.0, "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0, "ritenute": 0.0}
+    
+    t_up = df_f['tipo'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
+    cat_up = df_f['costo_categoria'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
+    
+    # Distinzione esatta delle voci come nella vecchia app
+    is_nc = t_up.str.contains('CREDITO|NC', na=False)
+    is_omaggio = t_up.str.contains('OMAGG', na=False)
+    is_dip_vecchio = t_up.str.contains('STIPEND|DIPEND|BUSTA|PERSONALE', na=False) | cat_up.str.contains('STIPEND|DIPEND|PERSONALE', na=False)
+    is_emessa = t_up.str.contains('EMESS|VENDIT|ENTRAT', na=False) & ~is_nc & ~is_omaggio
+    is_fornitore = ~is_emessa & ~is_nc & ~is_omaggio & ~is_dip_vecchio
+
+    f_em = df_f[is_emessa] if not df_f.empty else pd.DataFrame()
+    f_nc = df_f[is_nc] if not df_f.empty else pd.DataFrame()
+    f_forn = df_f[is_fornitore] if not df_f.empty else pd.DataFrame()
+    f_dip_v = df_f[is_dip_vecchio] if not df_f.empty else pd.DataFrame()
+
+    incassi_lordi = (f_em['imponibile'] * (1 + f_em['iva_perc']/100)).sum() if not f_em.empty else 0.0
+    note_credito = (f_nc['imponibile'] * (1 + f_nc['iva_perc']/100)).sum() if not f_nc.empty else 0.0
+    spese_fornitori = f_forn['imponibile'].sum() if not f_forn.empty else 0.0
+    
+    dip_vecchi = f_dip_v['imponibile'].sum() if not f_dip_v.empty else 0.0
+    dip_nuovi = (df_s['netto'] + df_s['contributi_f24']).sum() if not df_s.empty else 0.0
+    tot_dipendenti = dip_vecchi + dip_nuovi
+
+    iva_deb = ((f_em['imponibile'] * (f_em['iva_perc']/100)).sum() if not f_em.empty else 0.0) - ((f_nc['imponibile'] * (f_nc['iva_perc']/100)).sum() if not f_nc.empty else 0.0)
+    iva_cred = (f_forn['imponibile'] * (f_forn['iva_perc']/100)).sum() if not f_forn.empty else 0.0
+    liq_iva = iva_cred - iva_deb
+
+    ricavi_netti = (f_em['imponibile'].sum() if not f_em.empty else 0.0) - (f_nc['imponibile'].sum() if not f_nc.empty else 0.0)
+    utile_netto = ricavi_netti - spese_fornitori - tot_dipendenti
+
+    return {
+        "lordi": incassi_lordi, "utile": utile_netto, "fornitori": spese_fornitori,
+        "dipendenti": tot_dipendenti, "nc": note_credito, "iva_deb": iva_deb,
+        "iva_cred": iva_cred, "liq_iva": liq_iva
+    }
+
 if menu == "📊 Cruscotto & Bilancio":
-    st.title(f"📊 Cruscotto SRL • {periodo_scelto} ({anno_filtro})")
+    st.subheader(f"📊 Cruscotto SRL • {periodo_scelto} ({anno_filtro})")
+    tot = calcola_scheda(df_fatture, df_stipendi)
     
-    # Riconosce qualsiasi formato delle fatture emesse (FATTURA EMESSA, Vendita, Entrata, ecc.)
-    tipo_up = df_fatture['tipo'].astype(str).str.upper() if not df_fatture.empty else pd.Series(dtype=str)
-    incassi = df_fatture[tipo_up.str.contains('EMESS|VENDIT|ENTRAT', na=False)] if not df_fatture.empty else pd.DataFrame()
-    costi = df_fatture[~tipo_up.str.contains('EMESS|VENDIT|ENTRAT', na=False)] if not df_fatture.empty else pd.DataFrame()
-    
-    tot_lordi = (incassi['imponibile'] * (1 + incassi['iva_perc']/100)).sum() if not incassi.empty else 0.0
-    tot_stipendi = (df_stipendi['netto'] + df_stipendi['contributi_f24']).sum() if not df_stipendi.empty else 0.0
-    utile_netto = (incassi['imponibile'].sum() if not incassi.empty else 0.0) - (costi['imponibile'].sum() if not costi.empty else 0.0) - tot_stipendi
-    
-    iva_deb = (incassi['imponibile'] * (incassi['iva_perc']/100)).sum() if not incassi.empty else 0.0
-    iva_cred = (costi['imponibile'] * (costi['iva_perc']/100)).sum() if not costi.empty else 0.0
-    pos_iva = iva_cred - iva_deb
-    
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💰 Incassi Lordi SRL", f"€ {tot_lordi:,.2f}")
-    c2.metric("📈 Utile Netto SRL", f"€ {utile_netto:,.2f}")
-    c3.metric("🧾 Posizione IVA", f"€ {abs(pos_iva):,.2f}", "A Credito" if pos_iva >= 0 else "A Debito")
-    c4.metric("👥 Costo Personale", f"€ {tot_stipendi:,.2f}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("💰 Incassi Lordi SRL", f"€ {tot['lordi']:,.2f}")
+    c2.metric("📈 Utile Netto SRL", f"€ {tot['utile']:,.2f}")
+    c3.metric("🧾 Liquidazione IVA SRL", f"€ {abs(tot['liq_iva']):,.2f}", "A Credito" if tot['liq_iva'] >= 0 else "A Debito")
 
     st.divider()
     col_b, col_t = st.columns(2)
     for socio, col in [("BAGLI", col_b), ("TROPEA", col_t)]:
         with col:
             st.subheader(f"👤 Rendiconto: {socio}")
-            inc_s = incassi[incassi['socio'] == socio] if not incassi.empty else pd.DataFrame()
-            cos_s = costi[costi['socio'] == socio] if not costi.empty else pd.DataFrame()
-            sti_s = df_stipendi[df_stipendi['socio'] == socio] if not df_stipendi.empty else pd.DataFrame()
-            
-            lordo_s = (inc_s['imponibile'] * (1 + inc_s['iva_perc']/100)).sum() if not inc_s.empty else 0.0
-            utile_s = (inc_s['imponibile'].sum() if not inc_s.empty else 0.0) - (cos_s['imponibile'].sum() if not cos_s.empty else 0.0) - ((sti_s['netto'] + sti_s['contributi_f24']).sum() if not sti_s.empty else 0.0)
+            df_f_s = df_fatture[df_fatture['socio'].astype(str).str.upper() == socio] if not df_fatture.empty else pd.DataFrame()
+            df_s_s = df_stipendi[df_stipendi['socio'].astype(str).str.upper() == socio] if not df_stipendi.empty else pd.DataFrame()
+            d = calcola_scheda(df_f_s, df_s_s)
             
             m1, m2 = st.columns(2)
-            m1.metric("Incassi Lordi", f"€ {lordo_s:,.2f}")
-            m2.metric("Utile Netto", f"€ {utile_s:,.2f}")
+            m1.metric("💰 Incassi Lordi", f"€ {d['lordi']:,.2f}")
+            m2.metric("📈 Utile Netto", f"€ {d['utile']:,.2f}")
+            
+            st.info(
+                f"**Spese Fornitori:** € {d['fornitori']:,.2f} | **Dipendenti:** € {d['dipendenti']:,.2f}\n\n"
+                f"**Note di Credito:** € {d['nc']:,.2f}\n\n"
+                f"**IVA Debito:** € {d['iva_deb']:,.2f} | **IVA Credito:** € {d['iva_cred']:,.2f}\n\n"
+                f"**Liquidazione IVA ({'A CREDITO' if d['liq_iva'] >= 0 else 'A DEBITO'}):** € {abs(d['liq_iva']):,.2f}\n\n"
+                f"💵 **LIQUIDITÀ DI CASSA STIMATA:** € {d['utile']:,.2f}"
+            )
 
 elif menu == "📈 Grafici & Andamento":
     mostra_grafici(df_fatture, df_stipendi)
@@ -128,4 +161,5 @@ elif menu == "📅 Acconti & Scadenze F24":
 
 elif menu == "📥 Importa / Esporta Excel":
     mostra_import_export()
+
 
