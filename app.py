@@ -19,7 +19,7 @@ def verifica_password():
         st.title("🔒 Accesso Riservato • SRL Control Pro 2.0")
         pwd = st.text_input("Inserisci la password:", type="password")
         if st.button("Entra", type="primary"):
-            if pwd == st.secrets["APP_PASSWORD"]:
+            if pwd == st.secrets.get("APP_PASSWORD", "Giovanna2026@"):
                 st.session_state["autenticato"] = True
                 st.rerun()
             else:
