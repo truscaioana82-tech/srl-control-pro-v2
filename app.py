@@ -12,6 +12,7 @@ from grafici import mostra_grafici
 from import_export import mostra_import_export
 from rubrica import mostra_rubrica
 from report_pdf import genera_pdf_bilancio, genera_pdf_socio
+from preventivi import mostra_preventivi
 
 st.set_page_config(page_title="SRL Control Pro 2.0", page_icon="🏛️", layout="wide")
 
@@ -38,6 +39,7 @@ st.sidebar.caption("BAGLI & TROPEA • Cloud Condiviso 🟢")
 menu = st.sidebar.radio("Navigazione", [
     "📊 Cruscotto & Bilancio",
     "🏗️ Analisi Cantieri",
+    "📋 Preventivi",
     "📑 Estratto Conto Clienti/Forn.",
     "📈 Grafici & Andamento",
     "📝 Prima Nota & Fatture",
@@ -198,6 +200,9 @@ if menu == "📊 Cruscotto & Bilancio":
 elif menu == "🏗️ Analisi Cantieri":
     mostra_cantieri(df_fatture, df_stipendi)
 
+elif menu == "📋 Preventivi":
+    mostra_preventivi()
+
 elif menu == "📑 Estratto Conto Clienti/Forn.":
     mostra_estratto_conto(df_fatture)
 
@@ -227,4 +232,5 @@ elif menu == "📅 Acconti & Scadenze F24":
 
 elif menu == "📥 Importa / Esporta Excel":
     mostra_import_export()
+
 
