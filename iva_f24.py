@@ -1,18 +1,73 @@
 import streamlit as st
 from database import esegui_query, carica_tabella, salva_tabella
 
+def calcola_valori_iva(df):
+    if df.empty:
+        return 0.0, 0.0, 0.0
+    
+    t_up = df['tipo'].astype(str).str.upper()
+    cat_up = df['costo_categoria'].astype(str).str.upper() if 'costo_categoria' in df.columns else ""
+    
+    is_nc = t_up.str.contains('CREDITO|NC', na=False)
+    is_omaggio = t_up.str.contains('OMAGG', na=False)
+    is_dip = t_up.str.contains('STIPEND|DIPEND|BUSTA|PERSONALE|CASSA EDILE', na=False) | (cat_up.str.contains('STIPEND|DIPEND|PERSONALE|CASSA EDILE', na=False) if isinstance(cat_up, object) and hasattr(cat_up, 'str') else False)
+    
+    is_emessa = t_up.str.contains('EMESS|VENDIT|ENTRAT', na=False) & ~is_nc & ~is_omaggio
+    is_acquisto = ~is_emessa & ~is_nc & ~is_omaggio & ~is_dip
+
+    iva_series = df['imponibile'] * (df['iva_perc'] / 100)
+    
+    iva_v = iva_series[is_emessa].sum() - iva_series[is_nc].sum()
+    iva_a = iva_series[is_acquisto].sum()
+    saldo = iva_a - iva_v
+    
+    return iva_v, iva_a, saldo
+
 def mostra_iva(df_fatture):
     st.title("🧾 Riepilogo IVA")
     if not df_fatture.empty:
-        df_fatture['importo_iva'] = df_fatture['imponibile'] * (df_fatture['iva_perc'] / 100)
-        iva_v = df_fatture[df_fatture['tipo'] == 'FATTURA EMESSA']['importo_iva'].sum()
-        iva_a = df_fatture[df_fatture['tipo'] != 'FATTURA EMESSA']['importo_iva'].sum()
-        saldo = iva_a - iva_v
+        # 1. Totale Generale SRL
+        st.subheader("🏛️ Totale Generale SRL")
+        iva_v, iva_a, saldo = calcola_valori_iva(df_fatture)
         
         c1, c2, c3 = st.columns(3)
         c1.metric("IVA su Vendite (Debito)", f"€ {iva_v:,.2f}")
         c2.metric("IVA su Acquisti (Credito)", f"€ {iva_a:,.2f}")
-        c3.metric("Saldo IVA", f"€ {abs(saldo):,.2f}", "A Credito" if saldo >= 0 else "Da Versare")
+        c3.metric("Saldo IVA SRL", f"€ {abs(saldo):,.2f}", "A Credito" if saldo >= 0 else "Da Versare", delta_color="normal" if saldo >= 0 else "inverse")
+        
+        st.divider()
+        
+        # 2. Dettaglio per Socio
+        st.subheader("👥 Dettaglio IVA per Socio")
+        col_b, col_t = st.columns(2)
+        
+        for socio, col in [("BAGLI", col_b), ("TROPEA", col_t)]:
+            with col:
+                st.markdown(f"### 👤 Socio: {socio}")
+                df_socio = df_fatture[df_fatture['socio'].astype(str).str.upper() == socio]
+                iv_s, ia_s, sal_s = calcola_valori_iva(df_socio)
+                
+                m1, m2 = st.columns(2)
+                m1.metric("IVA Debito", f"€ {iv_s:,.2f}")
+                m2.metric("IVA Credito", f"€ {ia_s:,.2f}")
+                st.metric(
+                    f"Saldo IVA ({socio})", 
+                    f"€ {abs(sal_s):,.2f}", 
+                    "A Credito" if sal_s >= 0 else "Da Versare",
+                    delta_color="normal" if sal_s >= 0 else "inverse"
+                )
+
+        # Mostra eventuale quota COMUNE solo se ci sono movimenti registrati come COMUNE
+        df_comune = df_fatture[df_fatture['socio'].astype(str).str.upper() == "COMUNE"]
+        if not df_comune.empty:
+            st.divider()
+            st.markdown("### 🤝 Quota COMUNE")
+            iv_c, ia_c, sal_c = calcola_valori_iva(df_comune)
+            cc1, cc2, cc3 = st.columns(3)
+            cc1.metric("IVA Debito (Comune)", f"€ {iv_c:,.2f}")
+            cc2.metric("IVA Credito (Comune)", f"€ {ia_c:,.2f}")
+            cc3.metric("Saldo IVA (Comune)", f"€ {abs(sal_c):,.2f}", "A Credito" if sal_c >= 0 else "Da Versare")
+            
     else:
         st.info("Nessun dato IVA per il periodo selezionato.")
 
