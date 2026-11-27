@@ -1,31 +1,54 @@
+import os
 import io
 import streamlit as st
 import pandas as pd
 from datetime import date
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 from rubrica import ottieni_nomi_rubrica
 
-def _genera_pdf_preventivo(num_prev, data_prev, cliente, oggetto, df_voci, iva_perc, note_finali):
+def _genera_pdf_preventivo(num_prev, data_prev, cliente, oggetto, df_voci, iva_perc, note_finali, logo_bytes=None, dati_azienda=""):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=35, leftMargin=35, topMargin=40, bottomMargin=40)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=35, leftMargin=35, topMargin=35, bottomMargin=35)
     styles = getSampleStyleSheet()
     elementi = []
 
-    # Intestazione Aziendale
-    elementi.append(Paragraph("<b>BAGLI & TROPEA S.R.L.</b>", styles["Title"]))
-    elementi.append(Paragraph("Impresa Edile & Ristrutturazioni", styles["Normal"]))
-    elementi.append(Spacer(1, 15))
+    # --- INTESTAZIONE CON LOGO + DATI AZIENDA ---
+    img_logo = None
+    if logo_bytes is not None:
+        img_logo = Image(io.BytesIO(logo_bytes), width=110, height=55, kind='proportional')
+    elif os.path.exists("logo.png"):
+        img_logo = Image("logo.png", width=110, height=55, kind='proportional')
+    elif os.path.exists("logo.jpg"):
+        img_logo = Image("logo.jpg", width=110, height=55, kind='proportional')
 
-    # Dati Preventivo e Cliente
+    testo_azienda = Paragraph(
+        f"<b>BAGLI & TROPEA S.R.L.</b><br/>{dati_azienda.replace(chr(10), '<br/>')}",
+        styles["Normal"]
+    )
+
+    if img_logo is not None:
+        tab_logo = Table([[img_logo, testo_azienda]], colWidths=[130, 395])
+        tab_logo.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        elementi.append(tab_logo)
+    else:
+        elementi.append(Paragraph("<b>BAGLI & TROPEA S.R.L.</b>", styles["Title"]))
+        elementi.append(Paragraph(dati_azienda.replace("\n", "<br/>"), styles["Normal"]))
+        elementi.append(Spacer(1, 12))
+
+    # --- DATI PREVENTIVO E CLIENTE ---
     dati_testa = [
         [Paragraph(f"<b>PREVENTIVO N. {num_prev}</b><br/>Data: {data_prev}", styles["Normal"]),
          Paragraph(f"<b>SPETT.LE CLIENTE:</b><br/>{cliente}", styles["Normal"])],
         [Paragraph(f"<b>Oggetto / Cantiere:</b> {oggetto}", styles["Normal"]), ""]
     ]
-    tab_testa = Table(dati_testa, colWidths=[260, 260])
+    tab_testa = Table(dati_testa, colWidths=[260, 265])
     tab_testa.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f4f6f9")),
@@ -35,7 +58,7 @@ def _genera_pdf_preventivo(num_prev, data_prev, cliente, oggetto, df_voci, iva_p
     elementi.append(tab_testa)
     elementi.append(Spacer(1, 18))
 
-    # Tabella Voci di Lavoro
+    # --- TABELLA VOCI DI LAVORO ---
     righe_tab = [["DESCRIZIONE LAVORAZIONI", "U.M.", "Q.TÀ", "PREZZO UNIT.", "TOTALE"]]
     tot_imponibile = 0.0
 
@@ -64,7 +87,7 @@ def _genera_pdf_preventivo(num_prev, data_prev, cliente, oggetto, df_voci, iva_p
     righe_tab.append(["", "", "", f"IVA ({iva_perc}%):", f"€ {importo_iva:,.2f}"])
     righe_tab.append(["", "", "", "TOTALE PREVENTIVO:", f"€ {tot_generale:,.2f}"])
 
-    tab_voci = Table(righe_tab, colWidths=[240, 45, 55, 90, 90])
+    tab_voci = Table(righe_tab, colWidths=[245, 50, 60, 85, 85])
     tab_voci.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e78")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
@@ -93,12 +116,27 @@ def _genera_pdf_preventivo(num_prev, data_prev, cliente, oggetto, df_voci, iva_p
 def mostra_preventivi():
     st.title("📋 Generatore Preventivi & Computi Rapidi")
     
+    # --- INTESTAZIONE E LOGO AZIENDALE ---
+    with st.expander("🖼️ Logo e Intestazione Aziendale (facoltativo)", expanded=False):
+        col_l1, col_l2 = st.columns(2)
+        file_logo = col_l1.file_uploader("Carica il vostro Logo (.png o .jpg)", type=["png", "jpg", "jpeg"])
+        dati_az = col_l2.text_area(
+            "Dati intestazione sotto il nome SRL",
+            value="Impresa Edile & Ristrutturazioni\nSede Legale: Mascalucia (CT) • P.IVA / C.F. ..."
+        )
+        if os.path.exists("logo.png") or os.path.exists("logo.jpg"):
+            st.caption("✅ Logo fisso rilevato automaticamente nella cartella dell'app.")
+
     nomi_clienti = ottieni_nomi_rubrica(["CLIENTE"])
     
     c1, c2, c3 = st.columns([1, 1, 1.5])
     num_prev = c1.text_input("Numero Preventivo", value=f"01/{date.today().year}")
     data_prev = c2.date_input("Data Preventivo", value=date.today())
-    iva_scelta = c3.selectbox("Aliquota IVA applicata", options=[10, 22, 4, 0], format_func=lambda x: f"{x}% {'(Ristrutturazione Edile)' if x == 10 else ('(Ordinaria)' if x == 22 else '')}")
+    iva_scelta = c3.selectbox(
+        "Aliquota IVA applicata", 
+        options=[10, 22, 4, 0], 
+        format_func=lambda x: f"{x}% {'(Ristrutturazione Edile)' if x == 10 else ('(Ordinaria)' if x == 22 else '')}"
+    )
 
     c4, c5 = st.columns(2)
     cli_rubrica = c4.selectbox("Scegli Cliente da Rubrica", options=["-- Scrivi nuovo cliente --"] + nomi_clienti)
@@ -130,7 +168,6 @@ def mostra_preventivi():
         key="editor_voci_preventivo"
     )
 
-    # Calcoli in tempo reale
     imp_tot = (df_editato["Quantità"].fillna(0.0) * df_editato["Prezzo Unitario (€)"].fillna(0.0)).sum()
     iva_tot = imp_tot * (iva_scelta / 100.0)
     lordo_tot = imp_tot + iva_tot
@@ -145,6 +182,8 @@ def mostra_preventivi():
         value="Validità offerta: 30 giorni.\nPagamenti: 30% all'accettazione, 40% a stato avanzamento lavori, 30% a fine lavori."
     )
 
+    logo_bytes = file_logo.getvalue() if file_logo is not None else None
+
     pdf_prev = _genera_pdf_preventivo(
         num_prev=num_prev,
         data_prev=data_prev.strftime("%d/%m/%Y"),
@@ -152,11 +191,13 @@ def mostra_preventivi():
         oggetto=oggetto_lavori or "Lavori edili vari",
         df_voci=df_editato,
         iva_perc=iva_scelta,
-        note_finali=note_cond
+        note_finali=note_cond,
+        logo_bytes=logo_bytes,
+        dati_azienda=dati_az
     )
 
     st.download_button(
-        label="📄 Scarica Preventivo in PDF (Pronto per Cliente)",
+        label="📄 Scarica Preventivo in PDF (con Logo)",
         data=pdf_prev,
         file_name=f"Preventivo_{num_prev.replace('/', '-')}_{cliente_finale.replace(' ', '_')}.pdf",
         mime="application/pdf",
