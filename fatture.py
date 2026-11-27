@@ -28,19 +28,29 @@ def mostra_prima_nota():
             
             st.subheader("1. Elenco Movimenti")
             
-            # --- INIZIO BARRA DI RICERCA ---
-            cerca = st.text_input(
+            # --- INIZIO BARRA DI RICERCA E FILTRO SOCIO ---
+            col_cerca, col_socio = st.columns([3, 1])
+            
+            cerca = col_cerca.text_input(
                 "🔍 Cerca per numero fattura o nome cliente/fornitore", 
                 placeholder="Es. 16/26 oppure ECOIN..."
             )
             
+            socio_filtro = col_socio.selectbox(
+                "👤 Filtra per Socio",
+                options=["Tutti", "BAGLI", "TROPEA", "COMUNE"]
+            )
+            
+            df_filtrato = df_all.copy()
+            
+            if socio_filtro != "Tutti":
+                df_filtrato = df_filtrato[df_filtrato["socio"].astype(str).str.upper() == socio_filtro]
+            
             if cerca:
-                filtro_num = df_all["num"].astype(str).str.contains(cerca, case=False, na=False)
-                filtro_nome = df_all["anagrafica"].astype(str).str.contains(cerca, case=False, na=False)
-                df_filtrato = df_all[filtro_num | filtro_nome]
-            else:
-                df_filtrato = df_all
-            # --- FINE BARRA DI RICERCA ---
+                filtro_num = df_filtrato["num"].astype(str).str.contains(cerca, case=False, na=False)
+                filtro_nome = df_filtrato["anagrafica"].astype(str).str.contains(cerca, case=False, na=False)
+                df_filtrato = df_filtrato[filtro_num | filtro_nome]
+            # --- FINE BARRA DI RICERCA E FILTRO SOCIO ---
             
             st.dataframe(df_filtrato, use_container_width=True, hide_index=True)
             
@@ -135,7 +145,6 @@ def mostra_prima_nota():
                 )
                 st.success("✅ Registrazione inserita su Cloud!")
                 st.rerun()
-
 
 
 
