@@ -61,12 +61,53 @@ def init_db():
             rinnovata INTEGER DEFAULT 0
         )'''))
 
+        conn.execute(text('''CREATE TABLE IF NOT EXISTS preventivi_cloud (
+            id SERIAL PRIMARY KEY,
+            num TEXT,
+            data_doc TEXT,
+            cliente TEXT,
+            indirizzo TEXT,
+            telefono TEXT,
+            descrizione TEXT,
+            importo DOUBLE PRECISION,
+            socio TEXT,
+            stato TEXT DEFAULT 'In Attesa'
+        )'''))
+
+        conn.execute(text('''CREATE TABLE IF NOT EXISTS listino_cloud (
+            id SERIAL PRIMARY KEY,
+            codice TEXT UNIQUE,
+            descrizione TEXT,
+            prezzo_unitario DOUBLE PRECISION,
+            unita_misura TEXT
+        )'''))
+
+        res = conn.execute(text("SELECT COUNT(*) FROM listino_cloud")).scalar()
+        if res == 0:
+            lavori_default = [
+                {"c": "CART01", "d": "FORNITURA E POSA DI CONTROSOFFITTO IN CARTONGESSO COSTITUITO DA STRUTTURA DI SOSTEGNO E LASTRA STANDARD", "p": 35.00, "u": "mq"},
+                {"c": "CART02", "d": "FORNITURA E POSA CONTROPARETE CON STRUTTURA DI SOSTEGNO IN LAMIERA ZINCATA E LASTRA STANDARD", "p": 40.00, "u": "mq"},
+                {"c": "TINT01", "d": "POSA DI RASATURA A PARO + TINTEGGIATURA INTERNA LAVABILE", "p": 18.00, "u": "mq"},
+                {"c": "VELE01", "d": "FORNITURA E POSA IN OPERA DI VELETTA PERIMETRALE PER INCASSO LED", "p": 25.00, "u": "ml"}
+            ]
+            for item in lavori_default:
+                conn.execute(
+                    text("INSERT INTO listino_cloud (codice, descrizione, prezzo_unitario, unita_misura) VALUES (:c, :d, :p, :u)"),
+                    item
+                )
+
 def _mappa_tabella(nome):
-    mappa = {"fatture": "fatture_v2", "stipendi": "stipendi_v2", "f24": "f24_v2"}
+    mappa = {
+        "fatture": "fatture_v2",
+        "stipendi": "stipendi_v2",
+        "f24": "f24_v2",
+        "preventivi": "preventivi_cloud",
+        "listino": "listino_cloud"
+    }
     return mappa.get(nome, nome)
 
 def esegui_query(query, params=None):
-    for vecchia, nuova in [("fatture", "fatture_v2"), ("stipendi", "stipendi_v2"), ("f24", "f24_v2")]:
+    for vecchia, nuova in [("fatture", "fatture_v2"), ("stipendi", "stipendi_v2"), ("f24", "f24_v2"), ("preventivi", "preventivi_cloud"), ("listino", "listino_cloud")]:
         query = query.replace(f" {vecchia} ", f" {nuova} ").replace(f" {vecchia}\n", f" {nuova}\n")
     engine = get_engine()
     with engine.begin() as conn:
@@ -85,6 +126,4 @@ def salva_tabella(df, nome_tabella):
         df_to_save = df.drop(columns=["id"], errors="ignore")
         if not df_to_save.empty:
             df_to_save.to_sql(tabella_reale, conn, if_exists="append", index=False)
-
-
 
