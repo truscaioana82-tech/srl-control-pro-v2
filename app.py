@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import date
-from database import init_db, carica_tabella, get_connection
+from database import init_db, carica_tabella, get_engine
 from fatture import mostra_prima_nota
 from stipendi import mostra_stipendi
 from iva_f24 import mostra_iva, mostra_f24
@@ -10,10 +10,27 @@ from scadenzario import mostra_scadenzario
 from grafici import mostra_grafici
 
 st.set_page_config(page_title="SRL Control Pro 2.0", page_icon="🏛️", layout="wide")
+
+# --- CONTROLLO PASSWORD (legge APP_PASSWORD dai Secrets) ---
+def verifica_password():
+    if "autenticato" not in st.session_state:
+        st.session_state["autenticato"] = False
+    if not st.session_state["autenticato"]:
+        st.title("🔒 Accesso Riservato • SRL Control Pro 2.0")
+        pwd = st.text_input("Inserisci la password:", type="password")
+        if st.button("Entra", type="primary"):
+            if pwd == st.secrets["APP_PASSWORD"]:
+                st.session_state["autenticato"] = True
+                st.rerun()
+            else:
+                st.error("❌ Password errata")
+        st.stop()
+
+verifica_password()
 init_db()
 
 st.sidebar.title("🏛️ SRL Control Pro 2.0")
-st.sidebar.caption("BAGLI & TROPEA • Versione Completa")
+st.sidebar.caption("BAGLI & TROPEA • Cloud Condiviso 🟢")
 
 menu = st.sidebar.radio("Navigazione", [
     "📊 Cruscotto & Bilancio",
@@ -43,13 +60,11 @@ periodo_scelto = st.sidebar.selectbox("Mese / Periodo", options=list(mesi_map.ke
 df_fatture = carica_tabella("fatture")
 df_stipendi = carica_tabella("stipendi")
 
-# Filtro Anno
 if anno_filtro != "Tutti" and not df_fatture.empty:
     df_fatture = df_fatture[df_fatture['data'].astype(str).str.startswith(anno_filtro)]
 if anno_filtro != "Tutti" and not df_stipendi.empty:
     df_stipendi = df_stipendi[df_stipendi['data'].astype(str).str.startswith(anno_filtro)]
 
-# Filtro Mese / Semestre
 mesi_target = mesi_map[periodo_scelto]
 if mesi_target is not None:
     if not df_fatture.empty:
@@ -122,15 +137,13 @@ elif menu == "📥 Importa / Esporta Excel":
     
     st.divider()
     uploaded = st.file_uploader("Importa fatture da Excel", type=["xlsx"])
-    if uploaded and st.button("📥 Carica nel Database"):
+    if uploaded and st.button("📥 Carica nel Database Cloud"):
         df_imp = pd.read_excel(uploaded)
         colonne = ['data', 'tipo', 'num', 'anagrafica', 'imponibile', 'iva_perc', 'socio', 'ritenuta_perc', 'costo_categoria']
         for col in colonne:
             if col not in df_imp.columns:
                 df_imp[col] = str(date.today()) if col == 'data' else (0 if 'perc' in col or col == 'imponibile' else "GENERALE")
-        conn = get_connection()
-        df_imp[colonne].to_sql("fatture", conn, if_exists="append", index=False)
-        conn.close()
-        st.success(f"✅ Importate {len(df_imp)} righe!")
-
-
+        df_imp['pagata'] = 1
+        engine = get_engine()
+        df_imp[colonne + ['pagata']].to_sql("fatture", engine, if_exists="append", index=False)
+        st.success(f"✅ Importate {len(df_imp)} righe su Neon Cloud!")
