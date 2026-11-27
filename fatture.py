@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from database import get_connection, carica_tabella
+from database import esegui_query, carica_tabella
 
 def mostra_prima_nota():
     st.title("📝 Prima Nota & Registro Fatture")
@@ -52,14 +52,13 @@ def mostra_prima_nota():
                         nuova_pagata = st.checkbox("Pagata?", value=bool(riga["pagata"]))
                         
                         if st.form_submit_button("💾 Salva Modifiche", type="primary"):
-                            conn = get_connection()
-                            c = conn.cursor()
-                            c.execute('''UPDATE fatture 
-                                         SET data=?, tipo=?, num=?, anagrafica=?, imponibile=?, iva_perc=?, socio=?, pagata=? 
-                                         WHERE id=?''',
-                                      (nuova_data, nuovo_tipo, nuovo_num, nuova_anag.upper(), nuovo_imp, nuova_iva, nuovo_socio, int(nuova_pagata), int(id_scelto)))
-                            conn.commit()
-                            conn.close()
+                            esegui_query(
+                                '''UPDATE fatture 
+                                   SET data=:d, tipo=:t, num=:n, anagrafica=:a, imponibile=:i, iva_perc=:iv, socio=:s, pagata=:p 
+                                   WHERE id=:id''',
+                                {"d": nuova_data, "t": nuovo_tipo, "n": nuovo_num, "a": nuova_anag.upper(),
+                                 "i": nuovo_imp, "iv": nuova_iva, "s": nuovo_socio, "p": int(nuova_pagata), "id": int(id_scelto)}
+                            )
                             st.success(f"✅ Fattura ID {id_scelto} aggiornata!")
                             st.rerun()
 
@@ -67,11 +66,7 @@ def mostra_prima_nota():
                 with st.expander("🗑️ CANCELLA QUESTA FATTURA", expanded=True):
                     st.warning(f"Stai per eliminare la fattura **ID {id_scelto}** ({riga['anagrafica']}).")
                     if st.button("🗑️ Cancella Definitivamente"):
-                        conn = get_connection()
-                        c = conn.cursor()
-                        c.execute("DELETE FROM fatture WHERE id=?", (int(id_scelto),))
-                        conn.commit()
-                        conn.close()
+                        esegui_query("DELETE FROM fatture WHERE id=:id", {"id": int(id_scelto)})
                         st.success(f"🗑️ Fattura ID {id_scelto} eliminata!")
                         st.rerun()
         else:
@@ -95,13 +90,14 @@ def mostra_prima_nota():
             categoria = c9.text_input("Categoria", value="Generale")
             
             if st.form_submit_button("➕ Registra Movimento"):
-                conn = get_connection()
-                c = conn.cursor()
-                c.execute("INSERT INTO fatture (data, tipo, num, anagrafica, imponibile, iva_perc, socio, ritenuta_perc, costo_categoria, pagata) VALUES (?,?,?,?,?,?,?,?,?,1)",
-                          (str(data_doc), tipo_doc, num_doc, anagrafica.upper(), imponibile, iva_perc, socio, ritenuta, categoria))
-                conn.commit()
-                conn.close()
-                st.success("✅ Registrazione inserita!")
+                esegui_query(
+                    '''INSERT INTO fatture (data, tipo, num, anagrafica, imponibile, iva_perc, socio, ritenuta_perc, costo_categoria, pagata) 
+                       VALUES (:d, :t, :n, :a, :i, :iv, :s, :r, :c, 1)''',
+                    {"d": str(data_doc), "t": tipo_doc, "n": num_doc, "a": anagrafica.upper(),
+                     "i": imponibile, "iv": iva_perc, "s": socio, "r": ritenuta, "c": categoria}
+                )
+                st.success("✅ Registrazione inserita su Cloud!")
                 st.rerun()
+
 
 
