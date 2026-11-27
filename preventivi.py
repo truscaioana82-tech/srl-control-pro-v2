@@ -280,6 +280,7 @@ def mostra_preventivi():
                     mime="application/pdf",
                     type="primary"
                 )
+
     with tab2:
         st.subheader("Compilazione Nuovo Preventivo")
         df_listino = carica_tabella("listino")
@@ -307,7 +308,7 @@ def mostra_preventivi():
 
         with st.form("form_nuovo_prev"):
             col1, col2, col3, col4 = st.columns(4)
-            num_prev = col1.text_input("N° Preventivo", value=genera_numero_progressivo())
+            num_prev = col1.text_input("N° Preventivo", value=genera_numero_progressivo(df_all))
             data_prev = col2.date_input("Data", value=datetime.now())
             socio_prev = col3.selectbox("Socio Gestore", [SOCIO_1, SOCIO_2])
             stato_prev = col4.selectbox("Stato", ["In Attesa", "Approvato", "Rifiutato"])
@@ -342,7 +343,6 @@ def mostra_preventivi():
                     st.session_state.nuovo_imp = 0.0
                     st.success("✅ Preventivo salvato su Cloud!")
                     st.rerun()
-
     with tab3:
         st.subheader("Modifica o Elimina Preventivo")
         if df_all.empty:
@@ -414,3 +414,4 @@ def mostra_preventivi():
         if not df_listino.empty:
             st.dataframe(df_listino[["codice", "descrizione", "prezzo_unitario", "unita_misura"]], use_container_width=True, hide_index=True)
 
+                        
