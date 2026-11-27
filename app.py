@@ -64,6 +64,13 @@ mesi_map = {
 }
 periodo_scelto = st.sidebar.selectbox("Mese / Periodo", options=list(mesi_map.keys()))
 
+st.sidebar.divider()
+st.sidebar.link_button(
+    "📋 Apri Gestionale Preventivi",
+    "https://gestionale-preventivi-jrdkne6h5zzexy5m7yzxxn.streamlit.app/",
+    use_container_width=True
+)
+
 df_fatture = carica_tabella("fatture")
 df_stipendi = carica_tabella("stipendi")
 
