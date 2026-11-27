@@ -72,8 +72,11 @@ if mesi_target is not None:
 
 if menu == "📊 Cruscotto & Bilancio":
     st.title(f"📊 Cruscotto SRL • {periodo_scelto} ({anno_filtro})")
-    incassi = df_fatture[df_fatture['tipo'] == 'FATTURA EMESSA'] if not df_fatture.empty else pd.DataFrame()
-    costi = df_fatture[df_fatture['tipo'].isin(['FATTURA ACQUISTO', 'RICEVUTA'])] if not df_fatture.empty else pd.DataFrame()
+    
+    # Riconosce qualsiasi formato delle fatture emesse (FATTURA EMESSA, Vendita, Entrata, ecc.)
+    tipo_up = df_fatture['tipo'].astype(str).str.upper() if not df_fatture.empty else pd.Series(dtype=str)
+    incassi = df_fatture[tipo_up.str.contains('EMESS|VENDIT|ENTRAT', na=False)] if not df_fatture.empty else pd.DataFrame()
+    costi = df_fatture[~tipo_up.str.contains('EMESS|VENDIT|ENTRAT', na=False)] if not df_fatture.empty else pd.DataFrame()
     
     tot_lordi = (incassi['imponibile'] * (1 + incassi['iva_perc']/100)).sum() if not incassi.empty else 0.0
     tot_stipendi = (df_stipendi['netto'] + df_stipendi['contributi_f24']).sum() if not df_stipendi.empty else 0.0
