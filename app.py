@@ -9,7 +9,7 @@ from scadenzario import mostra_scadenzario
 from grafici import mostra_grafici
 from import_export import mostra_import_export
 from rubrica import mostra_rubrica
-from report_pdf import genera_pdf_bilancio
+from report_pdf import genera_pdf_bilancio, genera_pdf_socio
 
 st.set_page_config(page_title="SRL Control Pro 2.0", page_icon="🏛️", layout="wide")
 
@@ -113,7 +113,6 @@ def calcola_scheda(df_f, df_s):
         "dipendenti": tot_dipendenti, "cassa_edile": ce_nuova, "nc": note_credito, "iva_deb": iva_deb,
         "iva_cred": iva_cred, "liq_iva": liq_iva
     }
-
 if menu == "📊 Cruscotto & Bilancio":
     st.subheader(f"📊 Cruscotto SRL • {periodo_scelto} ({anno_filtro})")
     tot = calcola_scheda(df_fatture, df_stipendi)
@@ -126,14 +125,35 @@ if menu == "📊 Cruscotto & Bilancio":
     df_s_t = df_stipendi[df_stipendi['socio'].astype(str).str.upper() == "TROPEA"] if not df_stipendi.empty else pd.DataFrame()
     d_tropea = calcola_scheda(df_f_t, df_s_t)
 
-    pdf_bytes = genera_pdf_bilancio(periodo_scelto, anno_filtro, tot, d_bagli, d_tropea)
-    st.download_button(
-        label="📄 Scarica Bilancio in PDF",
-        data=pdf_bytes,
-        file_name=f"Bilancio_SRL_{anno_filtro}_{date.today()}.pdf",
-        mime="application/pdf",
-        type="primary"
-    )
+    b_pdf1, b_pdf2, b_pdf3 = st.columns(3)
+    with b_pdf1:
+        pdf_bytes = genera_pdf_bilancio(periodo_scelto, anno_filtro, tot, d_bagli, d_tropea)
+        st.download_button(
+            label="📄 PDF Bilancio Generale SRL",
+            data=pdf_bytes,
+            file_name=f"Bilancio_SRL_{anno_filtro}_{date.today()}.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True
+        )
+    with b_pdf2:
+        pdf_bagli = genera_pdf_socio("BAGLI", periodo_scelto, anno_filtro, d_bagli)
+        st.download_button(
+            label="👤 PDF Rendiconto BAGLI",
+            data=pdf_bagli,
+            file_name=f"Rendiconto_BAGLI_{anno_filtro}_{date.today()}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    with b_pdf3:
+        pdf_tropea = genera_pdf_socio("TROPEA", periodo_scelto, anno_filtro, d_tropea)
+        st.download_button(
+            label="👤 PDF Rendiconto TROPEA",
+            data=pdf_tropea,
+            file_name=f"Rendiconto_TROPEA_{anno_filtro}_{date.today()}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
     
     c1, c2, c3 = st.columns(3)
     c1.metric("💰 Incassi Lordi SRL", f"€ {tot['lordi']:,.2f}")
