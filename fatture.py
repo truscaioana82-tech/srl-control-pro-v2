@@ -92,7 +92,7 @@ def mostra_prima_nota():
             
             st.subheader("1. Elenco Movimenti")
             
-            col_cerca, col_socio = st.columns()
+            col_cerca, col_socio = st.columns(2)
             
             cerca = col_cerca.text_input(
                 "🔍 Cerca per numero fattura o nome cliente/fornitore", 
@@ -265,7 +265,5 @@ def mostra_prima_nota():
                             
                     st.success("✅ Registrazione inserita su Cloud!")
                     st.rerun()
-
-
 
 
