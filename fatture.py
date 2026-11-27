@@ -3,6 +3,17 @@ from datetime import date
 from database import esegui_query, carica_tabella
 from rubrica import ottieni_nomi_rubrica
 
+CATEGORIE_COSTI = (
+    "Generale",
+    "Assicurazioni Mezzi",
+    "Indumenti / DPI",
+    "Carburante & Manutenzione",
+    "Materiali Edili",
+    "Noleggi & Attrezzature",
+    "Utenze & Ufficio",
+    "Consulenze & Commercialista"
+)
+
 def mostra_prima_nota():
     st.title("📝 Prima Nota & Registro Fatture")
     tab1, tab2 = st.tabs(["✏️ Storico, Modifica & Cancella", "➕ Nuova Registrazione"])
@@ -50,15 +61,17 @@ def mostra_prima_nota():
                         idx_s = soci.index(riga["socio"]) if riga["socio"] in soci else 0
                         nuovo_socio = m7.selectbox("Socio", options=soci, index=idx_s)
                         
+                        cat_attuale = str(riga["costo_categoria"]) if riga["costo_categoria"] in CATEGORIE_COSTI else "Generale"
+                        nuova_cat = st.selectbox("Categoria", options=CATEGORIE_COSTI, index=CATEGORIE_COSTI.index(cat_attuale))
                         nuova_pagata = st.checkbox("Pagata?", value=bool(riga["pagata"]))
                         
                         if st.form_submit_button("💾 Salva Modifiche", type="primary"):
                             esegui_query(
                                 '''UPDATE fatture 
-                                   SET data=:d, tipo=:t, num=:n, anagrafica=:a, imponibile=:i, iva_perc=:iv, socio=:s, pagata=:p 
+                                   SET data=:d, tipo=:t, num=:n, anagrafica=:a, imponibile=:i, iva_perc=:iv, socio=:s, costo_categoria=:c, pagata=:p 
                                    WHERE id=:id''',
                                 {"d": nuova_data, "t": nuovo_tipo, "n": nuovo_num, "a": nuova_anag.upper(),
-                                 "i": nuovo_imp, "iv": nuova_iva, "s": nuovo_socio, "p": int(nuova_pagata), "id": int(id_scelto)}
+                                 "i": nuovo_imp, "iv": nuova_iva, "s": nuovo_socio, "c": nuova_cat, "p": int(nuova_pagata), "id": int(id_scelto)}
                             )
                             st.success(f"✅ Fattura ID {id_scelto} aggiornata!")
                             st.rerun()
@@ -79,20 +92,20 @@ def mostra_prima_nota():
             c1, c2, c3 = st.columns(3)
             data_doc = c1.date_input("Data", value=date.today())
             tipo_doc = c2.selectbox("Tipo Documento", options=("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA", "NOTA DI CREDITO"))
-            num_doc = c3.text_input("Numero Documento (es. 71/2026)")
+            num_doc = c3.text_input("Numero Documento (es. 71/2026 o Polizza)")
             
             c4, c5 = st.columns(2)
             anag_scelta = c4.selectbox("Scegli da Rubrica (oppure scrivi a destra)", options=["-- Scrivi nuovo nome --"] + nomi_rubrica)
-            anag_nuova = c5.text_input("Nuovo Cliente / Fornitore (se non in rubrica)")
+            anag_nuova = c5.text_input("Nuovo Cliente / Fornitore / Compagnia Assic.")
             
             c6, c7, c8 = st.columns(3)
             imponibile = c6.number_input("Imponibile (€)", min_value=0.0, step=10.0)
-            iva_perc = c7.selectbox("IVA %", options=(22, 10, 5, 4, 0))
+            iva_perc = c7.selectbox("IVA % (0% per Assicurazioni)", options=(22, 10, 5, 4, 0))
             socio = c8.selectbox("Socio", options=("BAGLI", "TROPEA", "COMUNE"))
             
             c9, c10 = st.columns(2)
             ritenuta = c9.number_input("Ritenuta %", min_value=0.0, max_value=100.0, value=0.0)
-            categoria = c10.text_input("Categoria", value="Generale")
+            categoria = c10.selectbox("Categoria Costo/Ricavo", options=CATEGORIE_COSTI)
             
             if st.form_submit_button("➕ Registra Movimento", type="primary"):
                 anag_finale = anag_nuova.strip().upper() if anag_nuova.strip() else (anag_scelta if anag_scelta != "-- Scrivi nuovo nome --" else "")
@@ -104,5 +117,6 @@ def mostra_prima_nota():
                 )
                 st.success("✅ Registrazione inserita su Cloud!")
                 st.rerun()
+
 
 
