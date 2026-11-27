@@ -7,6 +7,7 @@ from stipendi import mostra_stipendi
 from iva_f24 import mostra_iva, mostra_f24
 from scadenzario import mostra_scadenzario
 from scadenze_mezzi import mostra_scadenze_mezzi
+from cantieri_estratti import mostra_cantieri, mostra_estratto_conto
 from grafici import mostra_grafici
 from import_export import mostra_import_export
 from rubrica import mostra_rubrica
@@ -36,6 +37,8 @@ st.sidebar.caption("BAGLI & TROPEA • Cloud Condiviso 🟢")
 
 menu = st.sidebar.radio("Navigazione", [
     "📊 Cruscotto & Bilancio",
+    "🏗️ Analisi Cantieri",
+    "📑 Estratto Conto Clienti/Forn.",
     "📈 Grafici & Andamento",
     "📝 Prima Nota & Fatture",
     "⏳ Da Incassare / Pagare",
@@ -116,6 +119,9 @@ def calcola_scheda(df_f, df_s):
     }
 if menu == "📊 Cruscotto & Bilancio":
     st.subheader(f"📊 Cruscotto SRL • {periodo_scelto} ({anno_filtro})")
+    
+    ripartisci_comune = st.toggle("⚖️ Ripartisci movimenti 'COMUNE' al 50% / 50% tra BAGLI e TROPEA", value=False)
+    
     tot = calcola_scheda(df_fatture, df_stipendi)
     
     df_f_b = df_fatture[df_fatture['socio'].astype(str).str.upper() == "BAGLI"] if not df_fatture.empty else pd.DataFrame()
@@ -125,6 +131,14 @@ if menu == "📊 Cruscotto & Bilancio":
     df_f_t = df_fatture[df_fatture['socio'].astype(str).str.upper() == "TROPEA"] if not df_fatture.empty else pd.DataFrame()
     df_s_t = df_stipendi[df_stipendi['socio'].astype(str).str.upper() == "TROPEA"] if not df_stipendi.empty else pd.DataFrame()
     d_tropea = calcola_scheda(df_f_t, df_s_t)
+
+    if ripartisci_comune:
+        df_f_c = df_fatture[df_fatture['socio'].astype(str).str.upper() == "COMUNE"] if not df_fatture.empty else pd.DataFrame()
+        df_s_c = df_stipendi[df_stipendi['socio'].astype(str).str.upper() == "COMUNE"] if not df_stipendi.empty else pd.DataFrame()
+        d_comune = calcola_scheda(df_f_c, df_s_c)
+        for k in d_bagli:
+            d_bagli[k] += d_comune[k] / 2.0
+            d_tropea[k] += d_comune[k] / 2.0
 
     b_pdf1, b_pdf2, b_pdf3 = st.columns(3)
     with b_pdf1:
@@ -177,6 +191,12 @@ if menu == "📊 Cruscotto & Bilancio":
                 f"**Liquidazione IVA ({'A CREDITO' if d['liq_iva'] >= 0 else 'A DEBITO'}):** € {abs(d['liq_iva']):,.2f}\n\n"
                 f"💵 **LIQUIDITÀ DI CASSA STIMATA:** € {d['utile']:,.2f}"
             )
+
+elif menu == "🏗️ Analisi Cantieri":
+    mostra_cantieri(df_fatture, df_stipendi)
+
+elif menu == "📑 Estratto Conto Clienti/Forn.":
+    mostra_estratto_conto(df_fatture)
 
 elif menu == "📈 Grafici & Andamento":
     mostra_grafici(df_fatture, df_stipendi)
