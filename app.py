@@ -76,14 +76,14 @@ if mesi_target is not None:
 
 def calcola_scheda(df_f, df_s):
     if df_f.empty and df_s.empty:
-        return {"lordi": 0.0, "utile": 0.0, "fornitori": 0.0, "dipendenti": 0.0, "nc": 0.0, "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0}
+        return {"lordi": 0.0, "utile": 0.0, "fornitori": 0.0, "dipendenti": 0.0, "cassa_edile": 0.0, "nc": 0.0, "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0}
     
     t_up = df_f['tipo'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
     cat_up = df_f['costo_categoria'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
     
     is_nc = t_up.str.contains('CREDITO|NC', na=False)
     is_omaggio = t_up.str.contains('OMAGG', na=False)
-    is_dip_vecchio = t_up.str.contains('STIPEND|DIPEND|BUSTA|PERSONALE', na=False) | cat_up.str.contains('STIPEND|DIPEND|PERSONALE', na=False)
+    is_dip_vecchio = t_up.str.contains('STIPEND|DIPEND|BUSTA|PERSONALE|CASSA EDILE', na=False) | cat_up.str.contains('STIPEND|DIPEND|PERSONALE|CASSA EDILE', na=False)
     is_emessa = t_up.str.contains('EMESS|VENDIT|ENTRAT', na=False) & ~is_nc & ~is_omaggio
     is_fornitore = ~is_emessa & ~is_nc & ~is_omaggio & ~is_dip_vecchio
 
@@ -96,9 +96,10 @@ def calcola_scheda(df_f, df_s):
     note_credito = (f_nc['imponibile'] * (1 + f_nc['iva_perc']/100)).sum() if not f_nc.empty else 0.0
     spese_fornitori = f_forn['imponibile'].sum() if not f_forn.empty else 0.0
     
+    ce_nuova = df_s['cassa_edile'].fillna(0.0).sum() if (not df_s.empty and 'cassa_edile' in df_s.columns) else 0.0
     dip_vecchi = f_dip_v['imponibile'].sum() if not f_dip_v.empty else 0.0
     dip_nuovi = (df_s['netto'] + df_s['contributi_f24']).sum() if not df_s.empty else 0.0
-    tot_dipendenti = dip_vecchi + dip_nuovi
+    tot_dipendenti = dip_vecchi + dip_nuovi + ce_nuova
 
     iva_deb = ((f_em['imponibile'] * (f_em['iva_perc']/100)).sum() if not f_em.empty else 0.0) - ((f_nc['imponibile'] * (f_nc['iva_perc']/100)).sum() if not f_nc.empty else 0.0)
     iva_cred = (f_forn['imponibile'] * (f_forn['iva_perc']/100)).sum() if not f_forn.empty else 0.0
@@ -109,7 +110,7 @@ def calcola_scheda(df_f, df_s):
 
     return {
         "lordi": incassi_lordi, "utile": utile_netto, "fornitori": spese_fornitori,
-        "dipendenti": tot_dipendenti, "nc": note_credito, "iva_deb": iva_deb,
+        "dipendenti": tot_dipendenti, "cassa_edile": ce_nuova, "nc": note_credito, "iva_deb": iva_deb,
         "iva_cred": iva_cred, "liq_iva": liq_iva
     }
 
@@ -149,8 +150,8 @@ if menu == "📊 Cruscotto & Bilancio":
             m2.metric("📈 Utile Netto", f"€ {d['utile']:,.2f}")
             
             st.info(
-                f"**Spese Fornitori:** € {d['fornitori']:,.2f} | **Dipendenti:** € {d['dipendenti']:,.2f}\n\n"
-                f"**Note di Credito:** € {d['nc']:,.2f}\n\n"
+                f"**Spese Fornitori:** € {d['fornitori']:,.2f} | **Dipendenti (incl. Cassa Edile):** € {d['dipendenti']:,.2f}\n\n"
+                f"**🏗️ Cassa Edile Registrata:** € {d['cassa_edile']:,.2f} | **Note di Credito:** € {d['nc']:,.2f}\n\n"
                 f"**IVA Debito:** € {d['iva_deb']:,.2f} | **IVA Credito:** € {d['iva_cred']:,.2f}\n\n"
                 f"**Liquidazione IVA ({'A CREDITO' if d['liq_iva'] >= 0 else 'A DEBITO'}):** € {abs(d['liq_iva']):,.2f}\n\n"
                 f"💵 **LIQUIDITÀ DI CASSA STIMATA:** € {d['utile']:,.2f}"
@@ -179,4 +180,5 @@ elif menu == "📅 Acconti & Scadenze F24":
 
 elif menu == "📥 Importa / Esporta Excel":
     mostra_import_export()
+
 
