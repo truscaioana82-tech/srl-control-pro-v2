@@ -7,6 +7,16 @@ def mostra_stipendi():
     st.title("👥 Gestione Dipendenti, Stipendi & Cassa Edile")
     dipendenti_rubrica = ottieni_nomi_rubrica(["DIPENDENTE"])
     
+    # Recupera i cantieri già esistenti per comodità
+    df_st_esistenti = carica_tabella("stipendi")
+    df_ft_esistenti = carica_tabella("fatture")
+    cantieri_esistenti = set(["GENERALE"])
+    if not df_st_esistenti.empty and "cantiere" in df_st_esistenti.columns:
+        cantieri_esistenti.update(df_st_esistenti["cantiere"].dropna().astype(str).str.upper().tolist())
+    if not df_ft_esistenti.empty and "cantiere" in df_ft_esistenti.columns:
+        cantieri_esistenti.update(df_ft_esistenti["cantiere"].dropna().astype(str).str.upper().tolist())
+    lista_cantieri = sorted([c for c in cantieri_esistenti if c.strip()])
+
     with st.form("nuovo_stipendio"):
         st.subheader("Registra Busta Paga & Cassa Edile Mensile")
         c1, c2, c3 = st.columns(3)
@@ -21,14 +31,19 @@ def mostra_stipendi():
         contributi = c6.number_input("INPS + F24 (€)", min_value=0.0, step=50.0)
         cassa_edile = c7.number_input("🏗️ Cassa Edile (€)", min_value=0.0, step=20.0)
         socio_dip = c8.selectbox("Socio", options=("BAGLI", "TROPEA", "COMUNE"))
+
+        ca1, ca2 = st.columns(2)
+        cant_scelto = ca1.selectbox("🏗️ Cantiere (esistente)", options=lista_cantieri)
+        cant_nuovo = ca2.text_input("Oppure scrivi nuovo Cantiere", placeholder="Es. Cantiere Mascalucia")
         
         aggiungi_scad = st.checkbox("Invia automaticamente F24 e Cassa Edile allo scadenzario", value=True)
         
         if st.form_submit_button("💾 Registra Stipendio & Cassa Edile", type="primary"):
             dip_finale = dip_nuovo.strip().upper() if dip_nuovo.strip() else (dip_scelto if dip_scelto != "-- Scrivi nuovo nome --" else "")
+            cant_finale = cant_nuovo.strip().upper() if cant_nuovo.strip() else cant_scelto
             esegui_query(
-                "INSERT INTO stipendi (data, dipendente, mese, netto, contributi_f24, cassa_edile, socio) VALUES (:d, :dip, :m, :n, :c, :ce, :s)",
-                {"d": str(data_pag), "dip": dip_finale, "m": mese_comp, "n": netto, "c": contributi, "ce": cassa_edile, "s": socio_dip}
+                "INSERT INTO stipendi (data, dipendente, mese, netto, contributi_f24, cassa_edile, socio, cantiere) VALUES (:d, :dip, :m, :n, :c, :ce, :s, :ca)",
+                {"d": str(data_pag), "dip": dip_finale, "m": mese_comp, "n": netto, "c": contributi, "ce": cassa_edile, "s": socio_dip, "ca": cant_finale}
             )
             if aggiungi_scad:
                 if contributi > 0:
@@ -48,6 +63,9 @@ def mostra_stipendi():
     df_st = carica_tabella("stipendi")
     if not df_st.empty:
         df_st["cassa_edile"] = df_st["cassa_edile"].fillna(0.0)
+        if "cantiere" not in df_st.columns:
+            df_st["cantiere"] = "GENERALE"
+        df_st["cantiere"] = df_st["cantiere"].fillna("GENERALE")
         ed_st = st.data_editor(df_st.sort_values(by="id", ascending=False), num_rows="dynamic", use_container_width=True, disabled=["id"])
         if st.button("💾 Salva Modifiche Stipendi"):
             salva_tabella(ed_st, "stipendi")
