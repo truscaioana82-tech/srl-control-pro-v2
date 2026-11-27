@@ -1,5 +1,5 @@
 import streamlit as st
-from database import get_connection, carica_tabella
+from database import esegui_query, carica_tabella
 
 def mostra_scadenzario():
     st.title("⏳ Fatture da Incassare e da Pagare")
@@ -15,7 +15,6 @@ def mostra_scadenzario():
     df["totale_lordo"] = df["imponibile"] * (1 + df["iva_perc"] / 100)
     
     da_saldare = df[df["pagata"] == 0]
-    
     da_incassare = da_saldare[da_saldare["tipo"] == "FATTURA EMESSA"]
     da_pagare = da_saldare[da_saldare["tipo"] != "FATTURA EMESSA"]
     
@@ -43,10 +42,6 @@ def mostra_scadenzario():
         id_saldato = st.selectbox("Seleziona la fattura saldata:", options=list(opzioni.keys()), format_func=lambda x: opzioni[x])
         
         if st.button("✅ Conferma Incasso / Pagamento", type="primary"):
-            conn = get_connection()
-            c = conn.cursor()
-            c.execute("UPDATE fatture SET pagata=1 WHERE id=?", (int(id_saldato),))
-            conn.commit()
-            conn.close()
+            esegui_query("UPDATE fatture SET pagata=1 WHERE id=:id", {"id": int(id_saldato)})
             st.success("Fattura segnata come saldata!")
             st.rerun()
