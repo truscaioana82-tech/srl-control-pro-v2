@@ -414,4 +414,11 @@ def mostra_preventivi():
         if not df_listino.empty:
             st.dataframe(df_listino[["codice", "descrizione", "prezzo_unitario", "unita_misura"]], use_container_width=True, hide_index=True)
 
-                        
+           import fitz  # PyMuPDF
+
+def mostra_anteprima_pdf(pdf_bytes):
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    for i, page in enumerate(doc):
+        pix = page.get_pixmap(dpi=150)
+        st.image(pix.tobytes("png"), caption=f"Pagina {i + 1} di {len(doc)}", use_container_width=True)
+             
