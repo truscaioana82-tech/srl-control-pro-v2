@@ -1,5 +1,5 @@
 import streamlit as st
-from database import get_connection, carica_tabella, salva_tabella
+from database import esegui_query, carica_tabella, salva_tabella
 
 def mostra_iva(df_fatture):
     st.title("🧾 Riepilogo IVA")
@@ -24,11 +24,10 @@ def mostra_f24():
         desc = c2.text_input("Descrizione Tributo")
         imp = c3.number_input("Importo (€)", min_value=0.0, step=10.0)
         if st.form_submit_button("➕ Aggiungi F24"):
-            conn = get_connection()
-            c = conn.cursor()
-            c.execute("INSERT INTO f24 (scadenza, descrizione, importo, pagato) VALUES (?,?,?,0)", (str(scad), desc, imp))
-            conn.commit()
-            conn.close()
+            esegui_query(
+                "INSERT INTO f24 (scadenza, descrizione, importo, pagato) VALUES (:sc, :d, :i, 0)",
+                {"sc": str(scad), "d": desc, "i": imp}
+            )
             st.rerun()
 
     df_f24 = carica_tabella("f24")
@@ -46,3 +45,4 @@ def mostra_f24():
             salva_tabella(ed_f24, "f24")
             st.success("✅ Scadenzario aggiornato!")
             st.rerun()
+
