@@ -337,10 +337,10 @@ def genera_pdf_bytes(row_dict, percorso_logo):
 def inizializza_voci_salvate():
     esegui_query(
         """CREATE TABLE IF NOT EXISTS voci_preventivo (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             descrizione TEXT NOT NULL,
             unita_misura TEXT,
-            prezzo_unitario REAL DEFAULT 0.0
+            prezzo_unitario DOUBLE PRECISION DEFAULT 0.0
         )"""
     )
 
@@ -529,8 +529,7 @@ def mostra_preventivi():
                             st.success("🗑️ Preventivo eliminato!")
                             st.rerun()
         else:
-            st.info("Nessun preventivo salvato in archivio.")
-    with tab2:
+     with tab2:
         st.subheader("➕ Crea Nuovo Preventivo (con Anteprima Live)")
         num_suggerito = genera_numero_progressivo(df_all)
 
@@ -550,7 +549,6 @@ def mostra_preventivi():
             n_ind = c3.text_input("Indirizzo / Cantiere", placeholder="Es. Via Roma 10, Riposto")
             n_tel = c4.text_input("Telefono", placeholder="Es. 333 1234567")
 
-            # Selettore rapido dalle descrizioni salvate
             if not df_voci.empty:
                 st.markdown("**📚 Inserisci una descrizione salvata**")
                 v_col1, v_col2, v_col3 = st.columns((2.2, 0.8, 1.0))
@@ -571,7 +569,6 @@ def mostra_preventivi():
                         "Totale (€)": 0.0,
                     },))
                     df_corr = st.session_state["righe_nuovo_prev"]
-                    # Rimuove eventuali righe completamente vuote prima di accodare
                     df_corr = df_corr[df_corr["Descrizione"].astype(str).str.strip() != ""]
                     st.session_state["righe_nuovo_prev"] = pd.concat((df_corr, nuova_riga), ignore_index=True)
                     st.rerun()
@@ -700,5 +697,6 @@ def mostra_preventivi():
                 st.rerun()
         else:
             st.info("Non hai ancora memorizzato nessuna descrizione. Usa il modulo qui sopra per aggiungere la prima!")
+           st.info("Nessun preventivo salvato in archivio.")
 
 
