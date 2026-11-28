@@ -421,6 +421,293 @@ def testo_da_tabella(df_righe):
             linee.append(f"{desc} | {mis or '-'} | {pu_fmt} | {tot_fmt}")
 
     return "\n".join(linee), round(totale_gen, 2)
+def _render_tab_archivio(df_all, percorso_logo):
+    if df_all.empty:
+        st.info("Nessun preventivo salvato in archivio.")
+        return
+
+    df_all = df_all.dropna(subset=("id",))
+    df_all["id"] = df_all["id"].astype(int)
+    df_all = df_all.sort_values(by="id", ascending=False)
+
+    st.subheader("1. Elenco Preventivi")
+    cerca = st.text_input("🔍 Cerca preventivo per numero o cliente", placeholder="Es. 1/2026 oppure Rossi...")
+
+    df_vis = df_all.copy()
+    if cerca:
+        m_num = df_vis["num"].astype(str).str.contains(cerca, case=False, na=False)
+        m_cli = df_vis["cliente"].astype(str).str.contains(cerca, case=False, na=False)
+        df_vis = df_vis[m_num | m_cli]
+
+    st.dataframe(df_vis, use_container_width=True, hide_index=True)
+
+    if df_vis.empty:
+        return
+
+    st.divider()
+    st.subheader("2. Anteprima, Stampa PDF, Modifica o Elimina")
+
+    opzioni = {
+        int(r["id"]): f"Preventivo n.{r['num']} | {r['data_doc']} | {r['cliente']} (€ {float(r.get('importo') or 0):,.2f})"
+        for _, r in df_vis.iterrows()
+    }
+    id_sel = st.selectbox("Seleziona preventivo:", options=tuple(opzioni.keys()), format_func=lambda x: opzioni[x])
+    riga = df_all.set_index("id").loc[id_sel]
+
+    st.markdown("### 👁️ Anteprima Documento")
+    renderizza_anteprima_preventivo(
+        num_doc=riga["num"],
+        data_doc=riga["data_doc"],
+        cliente=riga["cliente"],
+        indirizzo=riga.get("indirizzo", ""),
+        telefono=riga.get("telefono", ""),
+        descrizione=riga.get("descrizione", ""),
+        importo_val=riga.get("importo", 0.0),
+    )
+
+    pdf_bytes = genera_pdf_bytes(riga.to_dict(), percorso_logo)
+    nome_pdf = f"Preventivo_{str(riga['num']).replace('/', '_')}_{str(riga['cliente']).replace(' ', '_')}.pdf"
+    st.download_button(
+        label="📥 Scarica Preventivo in PDF",
+        data=pdf_bytes,
+        file_name=nome_pdf,
+        mime="application/pdf",
+        type="primary",
+    )
+
+    st.divider()
+    col_m, col_d = st.columns((1.3, 0.7))
+
+    with col_m:
+        with st.expander("✏️ Modifica questo preventivo", expanded=False):
+            m1, m2 = st.columns(2)
+            m_num = m1.text_input("Numero", value=str(riga["num"]), key=f"m_num_{id_sel}")
+            m_data = m2.text_input("Data (AAAA-MM-GG)", value=str(riga["data_doc"]), key=f"m_data_{id_sel}")
+            m_cli = st.text_input("Cliente", value=str(riga["cliente"]), key=f"m_cli_{id_sel}")
+            m3, m4 = st.columns(2)
+            m_ind = m3.text_input("Indirizzo", value=str(riga.get("indirizzo") or ""), key=f"m_ind_{id_sel}")
+            m_tel = m4.text_input("Telefono", value=str(riga.get("telefono") or ""), key=f"m_tel_{id_sel}")
+
+            st.caption("Modifica i righi direttamente nella tabella (clicca '+' in basso per aggiungere righe):")
+            df_mod_init = tabella_da_testo(riga.get("descrizione", ""))
+            df_mod_edit = st.data_editor(
+                df_mod_init,
+                num_rows="dynamic",
+                use_container_width=True,
+                key=f"ed_mod_{id_sel}",
+                column_config={
+                    "Descrizione": st.column_config.TextColumn("Descrizione Lavorazioni", width="large"),
+                    "Misure": st.column_config.TextColumn("Misure (es. 45 mq)", width="small"),
+                    "Prezzo Unit. (€)": st.column_config.NumberColumn("Prezzo Unit. (€)", min_value=0.0, step=1.0, format="%.2f"),
+                    "Totale (€)": st.column_config.NumberColumn("Totale (€)", min_value=0.0, step=1.0, format="%.2f"),
+                },
+            )
+
+            m_desc_str, m_tot_calc = testo_da_tabella(df_mod_edit)
+            m_imp = st.number_input(
+                "Totale Preventivo (€)",
+                value=float(m_tot_calc if m_tot_calc > 0 else (riga.get("importo") or 0.0)),
+                step=50.0,
+                key=f"m_imp_{id_sel}",
+            )
+
+            if st.button("💾 Salva Modifiche", type="primary", key=f"btn_save_mod_{id_sel}"):
+                esegui_query(
+                    """UPDATE preventivi 
+                       SET num = :num, data_doc = :data_doc, cliente = :cliente, 
+                           indirizzo = :indirizzo, telefono = :telefono, 
+                           descrizione = :descrizione, importo = :importo 
+                       WHERE id = :id""",
+                    {
+                        "num": m_num.strip(),
+                        "data_doc": m_data.strip(),
+                        "cliente": m_cli.strip(),
+                        "indirizzo": m_ind.strip(),
+                        "telefono": m_tel.strip(),
+                        "descrizione": m_desc_str,
+                        "importo": m_imp,
+                        "id": id_sel,
+                    },
+                )
+                st.success("✅ Preventivo aggiornato!")
+                st.rerun()
+
+    with col_d:
+        with st.expander("🗑️ Elimina questo preventivo", expanded=False):
+            st.warning(f"Vuoi eliminare il preventivo **n.{riga['num']}** per **{riga['cliente']}**?")
+            if st.button("🚨 Conferma Eliminazione", type="primary", key=f"btn_del_{id_sel}"):
+                esegui_query("DELETE FROM preventivi WHERE id = :id", {"id": id_sel})
+                st.success("🗑️ Preventivo eliminato!")
+                st.rerun()
+def _render_tab_nuovo(df_all, df_voci, percorso_logo):
+    st.subheader("➕ Crea Nuovo Preventivo (con Anteprima Live)")
+    num_suggerito = genera_numero_progressivo(df_all)
+
+    if "righe_nuovo_prev" not in st.session_state:
+        st.session_state["righe_nuovo_prev"] = pd.DataFrame((
+            {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+        ))
+
+    col_form, col_live = st.columns((1.15, 1.1))
+
+    with col_form:
+        c1, c2 = st.columns(2)
+        n_num = c1.text_input("Numero Preventivo", value=num_suggerito)
+        n_data = c2.date_input("Data", value=date.today())
+        n_cli = st.text_input("Cliente / Azienda", placeholder="Es. Mario Rossi")
+        c3, c4 = st.columns(2)
+        n_ind = c3.text_input("Indirizzo / Cantiere", placeholder="Es. Via Roma 10, Riposto")
+        n_tel = c4.text_input("Telefono", placeholder="Es. 333 1234567")
+
+        if not df_voci.empty:
+            st.markdown("**📚 Inserisci una descrizione salvata**")
+            v_col1, v_col2, v_col3 = st.columns((2.2, 0.8, 1.0))
+            opz_voci = {
+                int(v["id"]): f"{v['descrizione']} (€ {float(v.get('prezzo_unitario') or 0):,.2f}/{v.get('unita_misura') or 'cad'})"
+                for _, v in df_voci.iterrows()
+            }
+            voce_scelta = v_col1.selectbox("Scegli lavorazione:", options=tuple(opz_voci.keys()), format_func=lambda x: opz_voci[x], label_visibility="collapsed")
+            qta_scelta = v_col2.text_input("Misure", placeholder="Es. 45 mq", label_visibility="collapsed")
+            if v_col3.button("➕ Inserisci Rigo", use_container_width=True):
+                riga_v = df_voci.set_index("id").loc[voce_scelta]
+                pu_v = float(riga_v.get("prezzo_unitario") or 0.0)
+                mis_txt = qta_scelta.strip() or str(riga_v.get("unita_misura") or "")
+                nuova_riga = pd.DataFrame(({
+                    "Descrizione": str(riga_v["descrizione"]),
+                    "Misure": mis_txt,
+                    "Prezzo Unit. (€)": pu_v,
+                    "Totale (€)": 0.0,
+                },))
+                df_corr = st.session_state["righe_nuovo_prev"]
+                df_corr = df_corr[df_corr["Descrizione"].astype(str).str.strip() != ""]
+                st.session_state["righe_nuovo_prev"] = pd.concat((df_corr, nuova_riga), ignore_index=True)
+                st.rerun()
+
+        st.markdown("**Righi Lavorazioni** *(scrivi nelle celle o aggiungi righe in basso)*")
+        df_nuovo_edit = st.data_editor(
+            st.session_state["righe_nuovo_prev"],
+            num_rows="dynamic",
+            use_container_width=True,
+            key="ed_nuovo_prev",
+            column_config={
+                "Descrizione": st.column_config.TextColumn("Descrizione Lavorazioni", width="large"),
+                "Misure": st.column_config.TextColumn("Misure (es. 45 mq)", width="small"),
+                "Prezzo Unit. (€)": st.column_config.NumberColumn("Prezzo Unit. (€)", min_value=0.0, step=1.0, format="%.2f"),
+                "Totale (€)": st.column_config.NumberColumn("Totale (€)", min_value=0.0, step=1.0, format="%.2f"),
+            },
+        )
+
+        n_desc_str, tot_calcolato = testo_da_tabella(df_nuovo_edit)
+        n_imp = st.number_input(
+            "Totale Preventivo (€) — calcolato dai righi o modificabile",
+            min_value=0.0,
+            value=float(tot_calcolato),
+            step=50.0,
+        )
+
+        b1, b2, b3 = st.columns((1.1, 1.1, 0.8))
+        with b1:
+            if st.button("💾 Salva in Archivio", type="primary", use_container_width=True):
+                if not n_cli.strip():
+                    st.error("⚠️ Inserisci almeno il nome del cliente.")
+                else:
+                    esegui_query(
+                        """INSERT INTO preventivi (num, data_doc, cliente, indirizzo, telefono, descrizione, importo)
+                           VALUES (:num, :data_doc, :cliente, :indirizzo, :telefono, :descrizione, :importo)""",
+                        {
+                            "num": n_num.strip(),
+                            "data_doc": str(n_data),
+                            "cliente": n_cli.strip(),
+                            "indirizzo": n_ind.strip(),
+                            "telefono": n_tel.strip(),
+                            "descrizione": n_desc_str,
+                            "importo": n_imp,
+                        },
+                    )
+                    st.session_state["righe_nuovo_prev"] = pd.DataFrame((
+                        {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+                    ))
+                    st.success("✅ Preventivo salvato con successo!")
+                    st.rerun()
+
+        with b2:
+            dati_bozza = {
+                "num": n_num,
+                "data_doc": str(n_data),
+                "cliente": n_cli or "Cliente",
+                "indirizzo": n_ind,
+                "telefono": n_tel,
+                "descrizione": n_desc_str,
+                "importo": n_imp,
+            }
+            pdf_bozza = genera_pdf_bytes(dati_bozza, percorso_logo)
+            st.download_button(
+                label="📥 Scarica PDF",
+                data=pdf_bozza,
+                file_name=f"Preventivo_{n_num.replace('/', '_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+        with b3:
+            if st.button("🧹 Svuota", use_container_width=True):
+                st.session_state["righe_nuovo_prev"] = pd.DataFrame((
+                    {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+                ))
+                st.rerun()
+
+    with col_live:
+        st.markdown("#### 👁️ Anteprima in Tempo Reale")
+        renderizza_anteprima_preventivo(
+            num_doc=n_num,
+            data_doc=n_data.strftime("%d/%m/%Y"),
+            cliente=n_cli,
+            indirizzo=n_ind,
+            telefono=n_tel,
+            descrizione=n_desc_str,
+            importo_val=n_imp,
+        )
+def _render_tab_voci(df_voci):
+    st.subheader("📚 Gestione Descrizioni Salvate (Listino Rapido)")
+    st.caption("Salva qui le lavorazioni che usi più spesso per richiamarle con un clic quando crei un preventivo.")
+
+    with st.form("form_nuova_voce"):
+        v1, v2, v3 = st.columns((2.5, 0.8, 0.9))
+        nuova_desc = v1.text_input("Descrizione Lavorazione", placeholder="Es. Fornitura e posa parete in cartongesso doppia lastra")
+        nuova_um = v2.text_input("Unità di misura", placeholder="Es. mq / ml / corpo")
+        nuovo_pu = v3.number_input("Prezzo Unit. (€)", min_value=0.0, step=1.0)
+
+        if st.form_submit_button("💾 Memorizza Descrizione", type="primary"):
+            if not nuova_desc.strip():
+                st.error("⚠️ Inserisci il testo della descrizione.")
+            else:
+                esegui_query(
+                    """INSERT INTO voci_preventivo (descrizione, unita_misura, prezzo_unitario)
+                       VALUES (:desc, :um, :pu)""",
+                    {"desc": nuova_desc.strip(), "um": nuova_um.strip(), "pu": nuovo_pu},
+                )
+                st.success("✅ Descrizione memorizzata!")
+                st.rerun()
+
+    st.divider()
+    if not df_voci.empty:
+        st.markdown("### Elenco Descrizioni Memorizzate")
+        st.dataframe(df_voci, use_container_width=True, hide_index=True)
+
+        opz_del_v = {
+            int(v["id"]): f"ID {int(v['id'])} - {v['descrizione']} (€ {float(v.get('prezzo_unitario') or 0):,.2f})"
+            for _, v in df_voci.iterrows()
+        }
+        c_del1, c_del2 = st.columns((2.5, 1))
+        id_v_del = c_del1.selectbox("Seleziona una descrizione da eliminare:", options=tuple(opz_del_v.keys()), format_func=lambda x: opz_del_v[x])
+        if c_del2.button("🗑️ Elimina Descrizione", use_container_width=True):
+            esegui_query("DELETE FROM voci_preventivo WHERE id = :id", {"id": id_v_del})
+            st.success("🗑️ Descrizione eliminata!")
+            st.rerun()
+    else:
+        st.info("Non hai ancora memorizzato nessuna descrizione. Usa il modulo qui sopra per aggiungere la prima!")
+
+
 def mostra_preventivi():
     st.title("📋 Gestione Preventivi")
     tab1, tab2, tab3 = st.tabs(("📂 Archivio, Anteprima & PDF", "➕ Nuovo Preventivo", "📚 Descrizioni Salvate"))
@@ -430,286 +717,12 @@ def mostra_preventivi():
     percorso_logo = trova_logo()
 
     with tab1:
-        if not df_all.empty:
-            df_all = df_all.dropna(subset=("id",))
-            df_all["id"] = df_all["id"].astype(int)
-            df_all = df_all.sort_values(by="id", ascending=False)
+        _render_tab_archivio(df_all, percorso_logo)
 
-            st.subheader("1. Elenco Preventivi")
-            cerca = st.text_input("🔍 Cerca preventivo per numero o cliente", placeholder="Es. 1/2026 oppure Rossi...")
-
-            df_vis = df_all.copy()
-            if cerca:
-                m_num = df_vis["num"].astype(str).str.contains(cerca, case=False, na=False)
-                m_cli = df_vis["cliente"].astype(str).str.contains(cerca, case=False, na=False)
-                df_vis = df_vis[m_num | m_cli]
-
-            st.dataframe(df_vis, use_container_width=True, hide_index=True)
-
-            if not df_vis.empty:
-                st.divider()
-                st.subheader("2. Anteprima, Stampa PDF, Modifica o Elimina")
-
-                opzioni = {
-                    int(r["id"]): f"Preventivo n.{r['num']} | {r['data_doc']} | {r['cliente']} (€ {float(r.get('importo') or 0):,.2f})"
-                    for _, r in df_vis.iterrows()
-                }
-                id_sel = st.selectbox("Seleziona preventivo:", options=tuple(opzioni.keys()), format_func=lambda x: opzioni[x])
-                riga = df_all.set_index("id").loc[id_sel]
-
-                st.markdown("### 👁️ Anteprima Documento")
-                renderizza_anteprima_preventivo(
-                    num_doc=riga["num"],
-                    data_doc=riga["data_doc"],
-                    cliente=riga["cliente"],
-                    indirizzo=riga.get("indirizzo", ""),
-                    telefono=riga.get("telefono", ""),
-                    descrizione=riga.get("descrizione", ""),
-                    importo_val=riga.get("importo", 0.0),
-                )
-
-                pdf_bytes = genera_pdf_bytes(riga.to_dict(), percorso_logo)
-                nome_pdf = f"Preventivo_{str(riga['num']).replace('/', '_')}_{str(riga['cliente']).replace(' ', '_')}.pdf"
-                st.download_button(
-                    label="📥 Scarica Preventivo in PDF",
-                    data=pdf_bytes,
-                    file_name=nome_pdf,
-                    mime="application/pdf",
-                    type="primary",
-                )
-
-                st.divider()
-                col_m, col_d = st.columns((1.3, 0.7))
-
-                with col_m:
-                    with st.expander("✏️ Modifica questo preventivo", expanded=False):
-                        m1, m2 = st.columns(2)
-                        m_num = m1.text_input("Numero", value=str(riga["num"]), key=f"m_num_{id_sel}")
-                        m_data = m2.text_input("Data (AAAA-MM-GG)", value=str(riga["data_doc"]), key=f"m_data_{id_sel}")
-                        m_cli = st.text_input("Cliente", value=str(riga["cliente"]), key=f"m_cli_{id_sel}")
-                        m3, m4 = st.columns(2)
-                        m_ind = m3.text_input("Indirizzo", value=str(riga.get("indirizzo") or ""), key=f"m_ind_{id_sel}")
-                        m_tel = m4.text_input("Telefono", value=str(riga.get("telefono") or ""), key=f"m_tel_{id_sel}")
-
-                        st.caption("Modifica i righi direttamente nella tabella (clicca '+' in basso per aggiungere righe):")
-                        df_mod_init = tabella_da_testo(riga.get("descrizione", ""))
-                        df_mod_edit = st.data_editor(
-                            df_mod_init,
-                            num_rows="dynamic",
-                            use_container_width=True,
-                            key=f"ed_mod_{id_sel}",
-                            column_config={
-                                "Descrizione": st.column_config.TextColumn("Descrizione Lavorazioni", width="large"),
-                                "Misure": st.column_config.TextColumn("Misure (es. 45 mq)", width="small"),
-                                "Prezzo Unit. (€)": st.column_config.NumberColumn("Prezzo Unit. (€)", min_value=0.0, step=1.0, format="%.2f"),
-                                "Totale (€)": st.column_config.NumberColumn("Totale (€)", min_value=0.0, step=1.0, format="%.2f"),
-                            },
-                        )
-
-                        m_desc_str, m_tot_calc = testo_da_tabella(df_mod_edit)
-                        m_imp = st.number_input(
-                            "Totale Preventivo (€)",
-                            value=float(m_tot_calc if m_tot_calc > 0 else (riga.get("importo") or 0.0)),
-                            step=50.0,
-                            key=f"m_imp_{id_sel}",
-                        )
-
-                        if st.button("💾 Salva Modifiche", type="primary", key=f"btn_save_mod_{id_sel}"):
-                            esegui_query(
-                                """UPDATE preventivi 
-                                   SET num = :num, data_doc = :data_doc, cliente = :cliente, 
-                                       indirizzo = :indirizzo, telefono = :telefono, 
-                                       descrizione = :descrizione, importo = :importo 
-                                   WHERE id = :id""",
-                                {
-                                    "num": m_num.strip(),
-                                    "data_doc": m_data.strip(),
-                                    "cliente": m_cli.strip(),
-                                    "indirizzo": m_ind.strip(),
-                                    "telefono": m_tel.strip(),
-                                    "descrizione": m_desc_str,
-                                    "importo": m_imp,
-                                    "id": id_sel,
-                                },
-                            )
-                            st.success("✅ Preventivo aggiornato!")
-                            st.rerun()
-
-                with col_d:
-                    with st.expander("🗑️ Elimina questo preventivo", expanded=False):
-                        st.warning(f"Vuoi eliminare il preventivo **n.{riga['num']}** per **{riga['cliente']}**?")
-                        if st.button("🚨 Conferma Eliminazione", type="primary", key=f"btn_del_{id_sel}"):
-                            esegui_query("DELETE FROM preventivi WHERE id = :id", {"id": id_sel})
-                            st.success("🗑️ Preventivo eliminato!")
-                            st.rerun()
-        else:
-     with tab2:
-        st.subheader("➕ Crea Nuovo Preventivo (con Anteprima Live)")
-        num_suggerito = genera_numero_progressivo(df_all)
-
-        if "righe_nuovo_prev" not in st.session_state:
-            st.session_state["righe_nuovo_prev"] = pd.DataFrame((
-                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
-            ))
-
-        col_form, col_live = st.columns((1.15, 1.1))
-
-        with col_form:
-            c1, c2 = st.columns(2)
-            n_num = c1.text_input("Numero Preventivo", value=num_suggerito)
-            n_data = c2.date_input("Data", value=date.today())
-            n_cli = st.text_input("Cliente / Azienda", placeholder="Es. Mario Rossi")
-            c3, c4 = st.columns(2)
-            n_ind = c3.text_input("Indirizzo / Cantiere", placeholder="Es. Via Roma 10, Riposto")
-            n_tel = c4.text_input("Telefono", placeholder="Es. 333 1234567")
-
-            if not df_voci.empty:
-                st.markdown("**📚 Inserisci una descrizione salvata**")
-                v_col1, v_col2, v_col3 = st.columns((2.2, 0.8, 1.0))
-                opz_voci = {
-                    int(v["id"]): f"{v['descrizione']} (€ {float(v.get('prezzo_unitario') or 0):,.2f}/{v.get('unita_misura') or 'cad'})"
-                    for _, v in df_voci.iterrows()
-                }
-                voce_scelta = v_col1.selectbox("Scegli lavorazione:", options=tuple(opz_voci.keys()), format_func=lambda x: opz_voci[x], label_visibility="collapsed")
-                qta_scelta = v_col2.text_input("Misure", placeholder="Es. 45 mq", label_visibility="collapsed")
-                if v_col3.button("➕ Inserisci Rigo", use_container_width=True):
-                    riga_v = df_voci.set_index("id").loc[voce_scelta]
-                    pu_v = float(riga_v.get("prezzo_unitario") or 0.0)
-                    mis_txt = qta_scelta.strip() or str(riga_v.get("unita_misura") or "")
-                    nuova_riga = pd.DataFrame(({
-                        "Descrizione": str(riga_v["descrizione"]),
-                        "Misure": mis_txt,
-                        "Prezzo Unit. (€)": pu_v,
-                        "Totale (€)": 0.0,
-                    },))
-                    df_corr = st.session_state["righe_nuovo_prev"]
-                    df_corr = df_corr[df_corr["Descrizione"].astype(str).str.strip() != ""]
-                    st.session_state["righe_nuovo_prev"] = pd.concat((df_corr, nuova_riga), ignore_index=True)
-                    st.rerun()
-
-            st.markdown("**Righi Lavorazioni** *(scrivi nelle celle o aggiungi righe in basso)*")
-            df_nuovo_edit = st.data_editor(
-                st.session_state["righe_nuovo_prev"],
-                num_rows="dynamic",
-                use_container_width=True,
-                key="ed_nuovo_prev",
-                column_config={
-                    "Descrizione": st.column_config.TextColumn("Descrizione Lavorazioni", width="large"),
-                    "Misure": st.column_config.TextColumn("Misure (es. 45 mq)", width="small"),
-                    "Prezzo Unit. (€)": st.column_config.NumberColumn("Prezzo Unit. (€)", min_value=0.0, step=1.0, format="%.2f"),
-                    "Totale (€)": st.column_config.NumberColumn("Totale (€)", min_value=0.0, step=1.0, format="%.2f"),
-                },
-            )
-
-            n_desc_str, tot_calcolato = testo_da_tabella(df_nuovo_edit)
-            n_imp = st.number_input(
-                "Totale Preventivo (€) — calcolato dai righi o modificabile",
-                min_value=0.0,
-                value=float(tot_calcolato),
-                step=50.0,
-            )
-
-            b1, b2, b3 = st.columns((1.1, 1.1, 0.8))
-            with b1:
-                if st.button("💾 Salva in Archivio", type="primary", use_container_width=True):
-                    if not n_cli.strip():
-                        st.error("⚠️ Inserisci almeno il nome del cliente.")
-                    else:
-                        esegui_query(
-                            """INSERT INTO preventivi (num, data_doc, cliente, indirizzo, telefono, descrizione, importo)
-                               VALUES (:num, :data_doc, :cliente, :indirizzo, :telefono, :descrizione, :importo)""",
-                            {
-                                "num": n_num.strip(),
-                                "data_doc": str(n_data),
-                                "cliente": n_cli.strip(),
-                                "indirizzo": n_ind.strip(),
-                                "telefono": n_tel.strip(),
-                                "descrizione": n_desc_str,
-                                "importo": n_imp,
-                            },
-                        )
-                        st.session_state["righe_nuovo_prev"] = pd.DataFrame((
-                            {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
-                        ))
-                        st.success("✅ Preventivo salvato con successo!")
-                        st.rerun()
-
-            with b2:
-                dati_bozza = {
-                    "num": n_num,
-                    "data_doc": str(n_data),
-                    "cliente": n_cli or "Cliente",
-                    "indirizzo": n_ind,
-                    "telefono": n_tel,
-                    "descrizione": n_desc_str,
-                    "importo": n_imp,
-                }
-                pdf_bozza = genera_pdf_bytes(dati_bozza, percorso_logo)
-                st.download_button(
-                    label="📥 Scarica PDF",
-                    data=pdf_bozza,
-                    file_name=f"Preventivo_{n_num.replace('/', '_')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-
-            with b3:
-                if st.button("🧹 Svuota", use_container_width=True):
-                    st.session_state["righe_nuovo_prev"] = pd.DataFrame((
-                        {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
-                    ))
-                    st.rerun()
-
-        with col_live:
-            st.markdown("#### 👁️ Anteprima in Tempo Reale")
-            renderizza_anteprima_preventivo(
-                num_doc=n_num,
-                data_doc=n_data.strftime("%d/%m/%Y"),
-                cliente=n_cli,
-                indirizzo=n_ind,
-                telefono=n_tel,
-                descrizione=n_desc_str,
-                importo_val=n_imp,
-            )
+    with tab2:
+        _render_tab_nuovo(df_all, df_voci, percorso_logo)
 
     with tab3:
-        st.subheader("📚 Gestione Descrizioni Salvate (Listino Rapido)")
-        st.caption("Salva qui le lavorazioni che usi più spesso per richiamarle con un clic quando crei un preventivo.")
+        _render_tab_voci(df_voci)
 
-        with st.form("form_nuova_voce"):
-            v1, v2, v3 = st.columns((2.5, 0.8, 0.9))
-            nuova_desc = v1.text_input("Descrizione Lavorazione", placeholder="Es. Fornitura e posa parete in cartongesso doppia lastra")
-            nuova_um = v2.text_input("Unità di misura", placeholder="Es. mq / ml / corpo")
-            nuovo_pu = v3.number_input("Prezzo Unit. (€)", min_value=0.0, step=1.0)
-
-            if st.form_submit_button("💾 Memorizza Descrizione", type="primary"):
-                if not nuova_desc.strip():
-                    st.error("⚠️ Inserisci il testo della descrizione.")
-                else:
-                    esegui_query(
-                        """INSERT INTO voci_preventivo (descrizione, unita_misura, prezzo_unitario)
-                           VALUES (:desc, :um, :pu)""",
-                        {"desc": nuova_desc.strip(), "um": nuova_um.strip(), "pu": nuovo_pu},
-                    )
-                    st.success("✅ Descrizione memorizzata!")
-                    st.rerun()
-
-        st.divider()
-        if not df_voci.empty:
-            st.markdown("### Elenco Descrizioni Memorizzate")
-            st.dataframe(df_voci, use_container_width=True, hide_index=True)
-
-            opz_del_v = {
-                int(v["id"]): f"ID {int(v['id'])} - {v['descrizione']} (€ {float(v.get('prezzo_unitario') or 0):,.2f})"
-                for _, v in df_voci.iterrows()
-            }
-            c_del1, c_del2 = st.columns((2.5, 1))
-            id_v_del = c_del1.selectbox("Seleziona una descrizione da eliminare:", options=tuple(opz_del_v.keys()), format_func=lambda x: opz_del_v[x])
-            if c_del2.button("🗑️ Elimina Descrizione", use_container_width=True):
-                esegui_query("DELETE FROM voci_preventivo WHERE id = :id", {"id": id_v_del})
-                st.success("🗑️ Descrizione eliminata!")
-                st.rerun()
-        else:
-            st.info("Non hai ancora memorizzato nessuna descrizione. Usa il modulo qui sopra per aggiungere la prima!")
-           st.info("Nessun preventivo salvato in archivio.")
 
