@@ -17,11 +17,16 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def trova_logo():
     estensioni = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
-    if os.path.exists(BASE_DIR):
-        for file in os.listdir(BASE_DIR):
-            if "logo" in file.lower() and file.lower().endswith(estensioni):
-                return os.path.join(BASE_DIR, file)
-    return None
+    prima_immagine = None
+    for radice, _, files in os.walk(BASE_DIR):
+        for file in files:
+            if file.lower().endswith(estensioni):
+                percorso_completo = os.path.join(radice, file)
+                if "logo" in file.lower():
+                    return percorso_completo
+                if prima_immagine is None:
+                    prima_immagine = percorso_completo
+    return prima_immagine
 
 
 def logo_in_base64():
@@ -30,7 +35,8 @@ def logo_in_base64():
         try:
             with open(percorso, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
-            ext = os.path.splitext(percorso)[1].lower().replace(".", "")
+            _, ext_raw = os.path.splitext(percorso)
+            ext = ext_raw.lower().replace(".", "")
             if ext == "jpg":
                 ext = "jpeg"
             return f"data:image/{ext};base64,{b64}"
@@ -369,7 +375,7 @@ def tabella_da_testo(testo_desc):
             desc, mis = parti
             pu_raw, tot_raw = "0", "0"
         else:
-            desc = parti[0] if parti else ""
+            desc = parti if parti else ""
             mis, pu_raw, tot_raw = "", "0", "0"
 
         pu_s = pu_raw.replace("€", "").replace(".", "").replace(",", ".").strip()
@@ -537,8 +543,7 @@ def mostra_preventivi():
                             st.success("🗑️ Preventivo eliminato!")
                             st.rerun()
         else:
-            st.info("Nessun preventivo salvato in archivio.")
-    with tab2:
+     with tab2:
         st.subheader("➕ Crea Nuovo Preventivo (con Anteprima Live)")
         num_suggerito = genera_numero_progressivo(df_all)
 
@@ -706,3 +711,5 @@ def mostra_preventivi():
                 st.rerun()
         else:
             st.info("Non hai ancora memorizzato nessuna descrizione. Usa il modulo qui sopra per aggiungere la prima!")
+           st.info("Nessun preventivo salvato in archivio.")
+
