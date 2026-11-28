@@ -66,24 +66,25 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
         if not riga.strip():
             continue
         righe_valide += 1
+        bg_riga = "#f4f7fb" if righe_valide % 2 == 1 else "#ffffff"
         parti = tuple(p.strip() for p in riga.split("|"))
         if len(parti) >= 4:
             p0, p1, p2, p3 = parti[:4]
             righe_html += (
-                f"<tr>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;'>{p0}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>{p1}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{p2}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{p3}</td>"
+                f"<tr style='background:{bg_riga};'>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;'>{p0}</td>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;text-align:center;'>{p1}</td>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;text-align:right;'>{p2}</td>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;text-align:right;font-weight:bold;'>{p3}</td>"
                 f"</tr>"
             )
         else:
             righe_html += (
-                f"<tr>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;'>{riga.strip()}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>-</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>-</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>-</td>"
+                f"<tr style='background:{bg_riga};'>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;'>{riga.strip()}</td>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;text-align:center;'>-</td>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;text-align:right;'>-</td>"
+                f"<td style='padding:8px;border:1px solid #d0d7de;text-align:right;'>-</td>"
                 f"</tr>"
             )
 
@@ -92,11 +93,11 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
 
     logo_uri = logo_in_base64()
     if logo_uri:
-        intestazione_sx = f"<img src='{logo_uri}' style='max-height:70px;max-width:290px;object-fit:contain;' />"
+        intestazione_sx = f"<img src='{logo_uri}' style='max-height:76px;max-width:310px;object-fit:contain;' />"
     else:
         intestazione_sx = (
-            "<div style='font-size:18px;font-weight:bold;color:#1b2340;'>CARTONGESSO &amp; COLOR GROUP S.r.l.</div>"
-            "<div style='font-size:12px;color:#555555;'>Opere in Cartongesso, Controsoffitti, Isolamenti e Tinteggiature</div>"
+            "<div style='font-size:20px;font-weight:bold;color:#1b2340;'>CARTONGESSO &amp; COLOR</div>"
+            "<div style='font-size:12px;font-weight:bold;color:#1b2340;letter-spacing:2px;'>GROUP S.R.L.</div>"
         )
 
     html = f"""<!DOCTYPE html>
@@ -105,31 +106,48 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
 <meta charset="utf-8">
 <style>
     body {{ margin: 0; padding: 6px; background: transparent; font-family: Arial, Helvetica, sans-serif; }}
-    .foglio {{ background: #ffffff; color: #111111; padding: 24px; border: 1px solid #d0d7de; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }}
+    .foglio {{ background: #ffffff; color: #111111; padding: 26px; border: 1px solid #d0d7de; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }}
 </style>
 </head>
 <body>
     <div class="foglio">
-        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1b2340;padding-bottom:12px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;">
             <div>{intestazione_sx}</div>
-            <div style="background:#1b2340;color:#ffffff;padding:10px 16px;border-radius:4px;text-align:center;min-width:150px;">
-                <div style="color:#f2b718;font-weight:bold;font-size:13px;">PREVENTIVO N. {num_doc}</div>
-                <div style="font-size:11px;margin-top:3px;">Data: {data_doc}</div>
+            <div style="background:#1b2340;color:#ffffff;padding:12px 18px;text-align:center;min-width:170px;">
+                <div style="color:#f2b718;font-weight:bold;font-size:13px;">PREVENTIVO N° {num_doc}</div>
+                <div style="font-size:11px;margin-top:4px;font-weight:bold;">Data: {data_doc}</div>
             </div>
         </div>
-        <div style="background:#eef2f8;border-left:4px solid #f2b718;padding:10px 14px;margin-bottom:16px;font-size:13px;">
-            <strong style="color:#1b2340;font-size:11px;letter-spacing:0.5px;">SPETT.LE CLIENTE</strong><br/>
-            <strong style="font-size:14px;">{cliente or '---'}</strong><br/>
-            {f'{indirizzo}<br/>' if indirizzo else ''}
-            {f'Tel: {telefono}' if telefono else ''}
+        <div style="border-top:3px solid #1b2340;border-bottom:2px solid #f2b718;height:2px;margin-bottom:16px;"></div>
+
+        <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:16px;">
+            <div style="flex:1.1;font-size:10.5px;line-height:1.45;color:#222222;">
+                <strong style="color:#1b2340;font-size:11px;">DI BAGLI UMBERTO E TROPEA LEONARDO</strong><br/>
+                Via Str. 11 Cosentini Trav C3 N 19 - 95018 Riposto (CT)<br/>
+                Cell: 347 0719403 · 388 1655596 | Ufficio: 376 254 6251<br/>
+                Email: info.cartongessocolorgroup@gmail.com<br/>
+                PEC: cartongesso.color@pec.it
+            </div>
+            <div style="flex:0.9;background:#eef2f8;border-left:4px solid #f2b718;padding:10px 14px;font-size:12px;line-height:1.4;">
+                <strong style="color:#1b2340;font-size:10px;letter-spacing:0.5px;">SPETT.LE CLIENTE</strong><br/>
+                <strong style="font-size:13px;">{cliente or '---'}</strong><br/>
+                {f'{indirizzo}<br/>' if indirizzo else ''}
+                {f'Tel: {telefono}' if telefono else ''}
+            </div>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;">
+
+        <div style="font-size:9.5px;font-style:italic;color:#333333;margin-bottom:8px;line-height:1.35;">
+            Progettazione, costruzione a secco, divisioni in cartongesso, isolamenti termo-acustici, protezione al fuoco REI 120, allestimento locali commerciali,
+            tinteggiature interne ed esterne, parati e cornici, decorazioni, controsoffitti civili e industriali, pavimenti galleggianti, impermeabilizzazioni
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:14px;">
             <thead>
                 <tr style="background:#1b2340;color:#ffffff;">
-                    <th style="padding:8px;text-align:left;width:52%;">DESCRIZIONE LAVORAZIONI</th>
-                    <th style="padding:8px;text-align:center;width:16%;">MISURE</th>
-                    <th style="padding:8px;text-align:right;width:16%;">PREZZO UNIT.</th>
-                    <th style="padding:8px;text-align:right;width:16%;">TOTALE</th>
+                    <th style="padding:9px;text-align:left;width:54%;">DESCRIZIONE LAVORI</th>
+                    <th style="padding:9px;text-align:center;width:15%;">MISURE</th>
+                    <th style="padding:9px;text-align:right;width:15%;">PREZZO UNIT.</th>
+                    <th style="padding:9px;text-align:right;width:16%;">TOTALE</th>
                 </tr>
             </thead>
             <tbody>
@@ -141,18 +159,20 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
                 </tr>
             </tbody>
         </table>
-        <div style="font-size:11px;color:#444444;border-left:3px solid #1b2340;padding-left:8px;margin-bottom:16px;">
+
+        <div style="font-size:10.5px;color:#444444;border-left:3px solid #1b2340;padding-left:8px;margin-bottom:18px;">
             <strong>NOTE E CONDIZIONI:</strong> Gli importi indicati si intendono IVA esclusa ove applicabile. Validità offerta 30 giorni.
         </div>
-        <div style="border-top:1px solid #d0d7de;padding-top:10px;display:flex;justify-content:space-between;font-size:11px;color:#555555;">
-            <div><strong>CARTONGESSO &amp; COLOR GROUP S.r.l.</strong></div>
+
+        <div style="border-top:1px solid #d0d7de;padding-top:10px;display:flex;justify-content:space-between;font-size:10.5px;color:#555555;">
+            <div><strong>CARTONGESSO &amp; COLOR GROUP S.r.l.</strong> · Via Str. 11 Cosentini Trav C3 N 19 - 95018 Riposto (CT)</div>
             <div style="color:#1b2340;font-weight:bold;">Timbro e Firma per Accettazione ______________________</div>
         </div>
     </div>
 </body>
 </html>"""
 
-    altezza_box = 370 + (max(1, righe_valide) * 34)
+    altezza_box = 440 + (max(1, righe_valide) * 38)
     components.html(html, height=altezza_box, scrolling=True)
 def genera_pdf_bytes(row_dict, percorso_logo):
     buffer_pdf = io.BytesIO()
@@ -180,17 +200,21 @@ def genera_pdf_bytes(row_dict, percorso_logo):
 
     BLU_LOGO = colors.HexColor("#1b2340")
     BLU_CHIARO = colors.HexColor("#eef2f8")
+    RIGA_ALT = colors.HexColor("#f4f7fb")
     GIALLO_LOGO = colors.HexColor("#f2b718")
     GRIGIO_BORDO = colors.HexColor("#d0d7de")
     GRIGIO_TESTO = colors.HexColor("#333333")
 
     s_badge_tit = ParagraphStyle("BadgeTit", fontName="Helvetica-Bold", fontSize=11, alignment=1, textColor=GIALLO_LOGO)
     s_badge_sub = ParagraphStyle("BadgeSub", fontName="Helvetica-Bold", fontSize=9, alignment=1, textColor=colors.white)
+    s_az_info = ParagraphStyle("AzInfo", fontName="Helvetica", fontSize=8, leading=11, textColor=GRIGIO_TESTO)
     s_spett_lbl = ParagraphStyle("SpettLbl", fontName="Helvetica-Bold", fontSize=8, textColor=BLU_LOGO)
     s_spett_val = ParagraphStyle("SpettVal", fontName="Helvetica", fontSize=9.5, leading=13, textColor=colors.black)
+    s_attivita = ParagraphStyle("Attivita", fontName="Helvetica-Oblique", fontSize=7.5, leading=10, textColor=GRIGIO_TESTO)
     s_cell = ParagraphStyle("Cell", fontName="Helvetica", fontSize=8.5, leading=11, textColor=colors.black)
     s_cell_c = ParagraphStyle("CellC", fontName="Helvetica", fontSize=8.5, leading=11, alignment=1, textColor=colors.black)
     s_cell_r = ParagraphStyle("CellR", fontName="Helvetica", fontSize=8.5, leading=11, alignment=2, textColor=colors.black)
+    s_cell_rb = ParagraphStyle("CellRB", fontName="Helvetica-Bold", fontSize=8.5, leading=11, alignment=2, textColor=colors.black)
     s_th = ParagraphStyle("TH", fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.white)
     s_th_c = ParagraphStyle("THC", fontName="Helvetica-Bold", fontSize=8.5, alignment=1, textColor=colors.white)
     s_th_r = ParagraphStyle("THR", fontName="Helvetica-Bold", fontSize=8.5, alignment=2, textColor=colors.white)
@@ -213,10 +237,10 @@ def genera_pdf_bytes(row_dict, percorso_logo):
                 img_buffer = io.BytesIO()
                 img.save(img_buffer, format="JPEG", quality=95)
                 img_buffer.seek(0)
-            logo_cell = Image(img_buffer, width=310, height=78, kind="proportional")
+            logo_cell = Image(img_buffer, width=300, height=76, kind="proportional")
             logo_cell.hAlign = "LEFT"
         except Exception:
-            logo_cell = Image(percorso_logo, width=310, height=78, kind="proportional")
+            logo_cell = Image(percorso_logo, width=300, height=76, kind="proportional")
             logo_cell.hAlign = "LEFT"
     else:
         logo_cell = Paragraph(
@@ -226,26 +250,42 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         )
 
     badge_tab = Table(
-        ((Paragraph(f"PREVENTIVO N. {num_doc}", s_badge_tit),),
+        ((Paragraph(f"PREVENTIVO N° {num_doc}", s_badge_tit),),
          (Paragraph(f"Data: {data_formattata}", s_badge_sub),)),
-        colWidths=(165,)
+        colWidths=(175,)
     )
     badge_tab.setStyle(TableStyle((
         ("BACKGROUND", (0, 0), (-1, -1), BLU_LOGO),
-        ("TOPPADDING", (0, 0), (-1, 0), 8),
-        ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
+        ("TOPPADDING", (0, 0), (-1, 0), 9),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 9),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
     )))
 
-    header_tab = Table(((logo_cell, badge_tab),), colWidths=(374, 165))
+    header_tab = Table(((logo_cell, badge_tab),), colWidths=(364, 175))
     header_tab.setStyle(TableStyle((
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ("LINEBELOW", (0, 0), (-1, 0), 2, BLU_LOGO),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
+        ("LINEBELOW", (0, 0), (-1, 0), 2.5, BLU_LOGO),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
     )))
     story.append(header_tab)
-    story.append(Spacer(1, 12))
+    linea_gialla = Table((("",),), colWidths=(539,), rowHeights=(3,))
+    linea_gialla.setStyle(TableStyle((
+        ("LINEABOVE", (0, 0), (-1, 0), 1.5, GIALLO_LOGO),
+        ("TOPPADDING", (0, 0), (-1, 0), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 0),
+    )))
+    story.append(linea_gialla)
+    story.append(Spacer(1, 10))
+
+    info_azienda = Paragraph(
+        "<b><font color='#1b2340' size='8.5'>DI BAGLI UMBERTO E TROPEA LEONARDO</font></b><br/>"
+        "Via Str. 11 Cosentini Trav C3 N 19 - 95018 Riposto (CT)<br/>"
+        "Cell: 347 0719403 · 388 1655596 | Ufficio: 376 254 6251<br/>"
+        "Email: info.cartongessocolorgroup@gmail.com<br/>"
+        "PEC: cartongesso.color@pec.it",
+        s_az_info
+    )
 
     testo_cliente = f"<b>{cliente}</b>"
     if indirizzo:
@@ -253,23 +293,38 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     if telefono:
         testo_cliente += f"<br/>Tel: {telefono}"
 
-    cliente_tab = Table(
+    cliente_box = Table(
         ((Paragraph("SPETT.LE CLIENTE", s_spett_lbl),),
          (Paragraph(testo_cliente, s_spett_val),)),
-        colWidths=(539,)
+        colWidths=(245,)
     )
-    cliente_tab.setStyle(TableStyle((
+    cliente_box.setStyle(TableStyle((
         ("BACKGROUND", (0, 0), (-1, -1), BLU_CHIARO),
         ("LINEBEFORE", (0, 0), (0, -1), 4, GIALLO_LOGO),
         ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, 0), 6),
         ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
     )))
-    story.append(cliente_tab)
-    story.append(Spacer(1, 14))
+
+    dati_row = Table(((info_azienda, cliente_box),), colWidths=(294, 245))
+    dati_row.setStyle(TableStyle((
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+    )))
+    story.append(dati_row)
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph(
+        "Progettazione, costruzione a secco, divisioni in cartongesso, isolamenti termo-acustici, protezione al fuoco REI 120, "
+        "allestimento locali commerciali, tinteggiature interne ed esterne, parati e cornici, decorazioni, controsoffitti civili "
+        "e industriali, pavimenti galleggianti, impermeabilizzazioni",
+        s_attivita
+    ))
+    story.append(Spacer(1, 6))
 
     righe_pdf = [
-        (Paragraph("DESCRIZIONE LAVORAZIONI", s_th),
+        (Paragraph("DESCRIZIONE LAVORI", s_th),
          Paragraph("MISURE", s_th_c),
          Paragraph("PREZZO UNIT.", s_th_r),
          Paragraph("TOTALE", s_th_r))
@@ -285,7 +340,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
                 Paragraph(p0, s_cell),
                 Paragraph(p1, s_cell_c),
                 Paragraph(p2, s_cell_r),
-                Paragraph(p3, s_cell_r),
+                Paragraph(p3, s_cell_rb),
             ))
         else:
             righe_pdf.append((
@@ -297,20 +352,25 @@ def genera_pdf_bytes(row_dict, percorso_logo):
 
     righe_pdf.append(("", "", Paragraph("TOTALE (€)", s_tot), Paragraph(importo_str, s_tot)))
 
-    voci_tab = Table(tuple(righe_pdf), colWidths=(279, 80, 90, 90), repeatRows=1)
+    voci_tab = Table(tuple(righe_pdf), colWidths=(284, 80, 85, 90), repeatRows=1)
     n_righe = len(righe_pdf)
-    voci_tab.setStyle(TableStyle((
+    stili_tab = [
         ("BACKGROUND", (0, 0), (-1, 0), BLU_LOGO),
-        ("TOPPADDING", (0, 0), (-1, 0), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+        ("TOPPADDING", (0, 0), (-1, 0), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
         ("GRID", (0, 0), (-1, n_righe - 2), 0.5, GRIGIO_BORDO),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 1), (-1, n_righe - 2), 6),
-        ("BOTTOMPADDING", (0, 1), (-1, n_righe - 2), 6),
+        ("TOPPADDING", (0, 1), (-1, n_righe - 2), 7),
+        ("BOTTOMPADDING", (0, 1), (-1, n_righe - 2), 7),
         ("BACKGROUND", (2, n_righe - 1), (3, n_righe - 1), GIALLO_LOGO),
         ("TOPPADDING", (2, n_righe - 1), (3, n_righe - 1), 7),
         ("BOTTOMPADDING", (2, n_righe - 1), (3, n_righe - 1), 7),
-    )))
+    ]
+    for idx in range(1, n_righe - 1):
+        if idx % 2 == 1:
+            stili_tab.append(("BACKGROUND", (0, idx), (-1, idx), RIGA_ALT))
+
+    voci_tab.setStyle(TableStyle(tuple(stili_tab)))
     story.append(voci_tab)
     story.append(Spacer(1, 14))
 
@@ -326,7 +386,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     story.append(Spacer(1, 24))
 
     footer_tab = Table(
-        ((Paragraph("<b>CARTONGESSO &amp; COLOR GROUP S.r.l.</b><br/>Opere in Cartongesso, Controsoffitti e Tinteggiature", s_f_sx),
+        ((Paragraph("<b>CARTONGESSO &amp; COLOR GROUP S.r.l.</b><br/>Via Str. 11 Cosentini Trav C3 N 19 - 95018 Riposto (CT)", s_f_sx),
           Paragraph("Timbro e Firma per Accettazione<br/><br/>______________________________", s_f_dx)),),
         colWidths=(270, 269)
     )
@@ -375,7 +435,7 @@ def tabella_da_testo(testo_desc):
             desc, mis = parti
             pu_raw, tot_raw = "0", "0"
         else:
-            desc = parti if parti else ""
+            desc = parti[0] if parti else ""
             mis, pu_raw, tot_raw = "", "0", "0"
 
         pu_s = pu_raw.replace("€", "").replace(".", "").replace(",", ".").strip()
@@ -724,5 +784,7 @@ def mostra_preventivi():
 
     with tab3:
         _render_tab_voci(df_voci)
+
+
 
 
