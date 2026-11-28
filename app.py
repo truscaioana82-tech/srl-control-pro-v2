@@ -116,11 +116,12 @@ def calcola_scheda(df_f, df_s):
     spese_fornitori = f_forn['imponibile'].sum() if not f_forn.empty else 0.0
 
     if not f_forn.empty and 'costo_categoria' in f_forn.columns:
-        cat_forn = f_forn['costo_categoria'].fillna("").astype(str).str.upper()
-        mask_mat = cat_forn.str.contains('MATERIAL', na=False)
-        mask_carb = cat_forn.str.contains('CARBURANT', na=False) & ~mask_mat
-        spese_materiali = f_forn.loc[mask_mat, 'imponibile'].sum()
+        cat_forn = f_forn['costo_categoria'].fillna("").astype(str).str.upper().str.strip()
+        mask_carb = cat_forn.str.contains('CARBURANT|GASOLIO|BENZINA|ENI|Q8|IP|ESSO|TAMOIL', na=False)
+        mask_altre_cat = cat_forn.str.contains('CONSULENZ|NOLEGG|NOLLEG|TELEFON|INDUMENT|DPI|UTENZ|ASSICURAZ', na=False)
+        mask_mat = (cat_forn.str.contains('MATERIAL|EDIL', na=False) | (~mask_carb & ~mask_altre_cat & (cat_forn == ""))) & ~mask_carb
         spese_carburante = f_forn.loc[mask_carb, 'imponibile'].sum()
+        spese_materiali = f_forn.loc[mask_mat, 'imponibile'].sum()
         spese_altre = spese_fornitori - spese_materiali - spese_carburante
     else:
         spese_materiali = 0.0
@@ -264,5 +265,6 @@ elif menu == "📅 Acconti & Scadenze F24":
 
 elif menu == "📥 Importa / Esporta Excel":
     mostra_import_export()
+
 
 
