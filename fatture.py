@@ -97,18 +97,24 @@ def mostra_prima_nota():
             df_all = df_all.dropna(subset=["id"])
             df_all["id"] = df_all["id"].astype(int)
             df_all = df_all.sort_values(by="id", ascending=False)
-            df_all["pagata"] = df_all["pagata"].fillna(1).astype(bool)
+            if "pagata" in df_all.columns:
+                df_all["pagata"] = df_all["pagata"].fillna(1).astype(bool)
             if "cantiere" not in df_all.columns:
                 df_all["cantiere"] = "GENERALE"
             df_all["cantiere"] = df_all["cantiere"].fillna("GENERALE").replace("", "GENERALE").astype(str).str.upper()
             
             st.subheader("1. Elenco Movimenti")
             
-            col_cerca, col_socio, col_cant = st.columns([2, 1, 1.2])
+            col_cerca, col_tipo, col_socio, col_cant = st.columns([2, 1.2, 1, 1.2])
             
             cerca = col_cerca.text_input(
                 "🔍 Cerca per numero o cliente/fornitore", 
                 placeholder="Es. 16/26 oppure ECOIN..."
+            )
+            
+            tipo_filtro = col_tipo.selectbox(
+                "📑 Filtra Tipo",
+                options=["Tutti", "Solo Emesse (Ricavi)", "Solo Acquisti / Ricevute", "Note di Credito"]
             )
             
             socio_filtro = col_socio.selectbox(
@@ -123,6 +129,15 @@ def mostra_prima_nota():
             
             df_filtrato = df_all.copy()
             
+            # Filtro per tipo documento (gestisce sia vecchi che nuovi nomi)
+            tipo_upper = df_filtrato["tipo"].astype(str).str.upper()
+            if tipo_filtro == "Solo Emesse (Ricavi)":
+                df_filtrato = df_filtrato[tipo_upper.isin(["EMESSA", "FATTURA EMESSA"])]
+            elif tipo_filtro == "Solo Acquisti / Ricevute":
+                df_filtrato = df_filtrato[tipo_upper.isin(["RICEVUTA", "FATTURA ACQUISTO"])]
+            elif tipo_filtro == "Note di Credito":
+                df_filtrato = df_filtrato[tipo_upper == "NOTA DI CREDITO"]
+
             if socio_filtro != "Tutti":
                 df_filtrato = df_filtrato[df_filtrato["socio"].astype(str).str.upper() == socio_filtro]
 
@@ -137,16 +152,23 @@ def mostra_prima_nota():
             st.dataframe(df_filtrato, use_container_width=True, hide_index=True)
             
             if not df_filtrato.empty:
-                tot_imp = df_filtrato["imponibile"].sum()
-                tot_iva = (df_filtrato["imponibile"] * (df_filtrato["iva_perc"] / 100)).sum()
-                tot_lordo = tot_imp + tot_iva
-                
+                t_up = df_filtrato["tipo"].astype(str).str.upper()
+                mask_emesse = t_up.isin(["EMESSA", "FATTURA EMESSA"])
+                mask_acquisti = t_up.isin(["RICEVUTA", "FATTURA ACQUISTO"])
+                mask_nc = t_up == "NOTA DI CREDITO"
+
+                imp_emesse = df_filtrato.loc[mask_emesse, "imponibile"].sum()
+                imp_acquisti = df_filtrato.loc[mask_acquisti, "imponibile"].sum()
+                imp_nc = df_filtrato.loc[mask_nc, "imponibile"].sum()
+
+                iva_emesse = (df_filtrato.loc[mask_emesse, "imponibile"] * (df_filtrato.loc[mask_emesse, "iva_perc"] / 100)).sum()
+                iva_acquisti = (df_filtrato.loc[mask_acquisti, "imponibile"] * (df_filtrato.loc[mask_acquisti, "iva_perc"] / 100)).sum()
+
                 t1, t2, t3, t4 = st.columns(4)
                 t1.metric("📄 Fatture trovate", f"{len(df_filtrato)}")
-                t2.metric("💶 Totale Imponibile", f"€ {tot_imp:,.2f}")
-                t3.metric("🧾 Totale IVA", f"€ {tot_iva:,.2f}")
-                t4.metric("💰 Totale Lordo", f"€ {tot_lordo:,.2f}")
-            
+                t2.metric("📈 Imponibile Emesse", f"€ {imp_emesse:,.2f}", delta=f"IVA: € {iva_emesse:,.2f}", delta_color="off")
+                t3.metric("📉 Imponibile Acquisti", f"€ {imp_acquisti:,.2f}", delta=f"IVA: € {iva_acquisti:,.2f}", delta_color="off")
+                t4.metric("⚖️ Saldo Imponibile", f"€ {(imp_emesse - imp_acquisti - imp_nc):,.2f}")
             st.divider()
             st.subheader("2. Seleziona una fattura da Modificare o Cancellare")
             
@@ -165,7 +187,7 @@ def mostra_prima_nota():
                         with st.form("form_modifica"):
                             m1, m2 = st.columns(2)
                             nuova_data = m1.text_input("Data (AAAA-MM-GG)", value=str(riga["data"]))
-                            tipi = ("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA", "NOTA DI CREDITO")
+                            tipi = ("FATTURA EMESSA", "FATTURA ACQUISTO", "EMESSA", "RICEVUTA", "NOTA DI CREDITO")
                             idx_t = tipi.index(riga["tipo"]) if riga["tipo"] in tipi else 0
                             nuovo_tipo = m2.selectbox("Tipo", options=tipi, index=idx_t)
                             
@@ -176,123 +198,107 @@ def mostra_prima_nota():
                             m5, m6, m7 = st.columns(3)
                             nuovo_imp = m5.number_input("Imponibile (€)", value=float(riga["imponibile"]), step=10.0)
                             nuova_iva = m6.number_input("IVA %", value=float(riga["iva_perc"]), step=1.0)
-                            soci = ("BAGLI", "TROPEA", "COMUNE")
-                            idx_s = soci.index(riga["socio"]) if riga["socio"] in soci else 0
-                            nuovo_socio = m7.selectbox("Socio", options=soci, index=idx_s)
+                            nuova_rit = m7.number_input("Ritenuta %", value=float(riga.get("ritenuta_perc", 0.0)), step=1.0)
                             
-                            m8, m9 = st.columns(2)
-                            cat_attuale = str(riga["costo_categoria"]) if riga["costo_categoria"] in CATEGORIE_COSTI else "Generale"
-                            nuova_cat = m8.selectbox("Categoria", options=CATEGORIE_COSTI, index=CATEGORIE_COSTI.index(cat_attuale))
-                            nuovo_cant = m9.text_input("🏗️ Cantiere", value=str(riga["cantiere"]))
-
-                            nuova_pagata = st.checkbox("Pagata?", value=bool(riga["pagata"]))
+                            m8, m9, m10 = st.columns(3)
+                            soci = ("BAGLI", "TROPEA", "COMUNE")
+                            idx_s = soci.index(str(riga["socio"]).upper()) if str(riga["socio"]).upper() in soci else 0
+                            nuovo_socio = m8.selectbox("Socio", options=soci, index=idx_s)
+                            
+                            cat_attuale = str(riga.get("costo_categoria", "Generale"))
+                            idx_c = CATEGORIE_COSTI.index(cat_attuale) if cat_attuale in CATEGORIE_COSTI else 0
+                            nuova_cat = m9.selectbox("Categoria", options=CATEGORIE_COSTI, index=idx_c)
+                            nuovo_cant = m10.text_input("Cantiere", value=str(riga["cantiere"]))
+                            
+                            nuova_pagata = st.checkbox("Fattura Pagata / Incassata", value=bool(riga.get("pagata", True)))
                             
                             if st.form_submit_button("💾 Salva Modifiche", type="primary"):
-                                cant_pulito = nuovo_cant.strip().upper() if nuovo_cant.strip() else "GENERALE"
                                 esegui_query(
-                                    '''UPDATE fatture 
-                                       SET data=:d, tipo=:t, num=:n, anagrafica=:a, imponibile=:i, iva_perc=:iv, socio=:s, costo_categoria=:c, cantiere=:ca, pagata=:p 
-                                       WHERE id=:id''',
-                                    {"d": nuova_data, "t": nuovo_tipo, "n": nuovo_num, "a": nuova_anag.upper(),
-                                     "i": nuovo_imp, "iv": nuova_iva, "s": nuovo_socio, "c": nuova_cat, "ca": cant_pulito, "p": int(nuova_pagata), "id": int(id_scelto)}
+                                    """UPDATE fatture SET data=?, tipo=?, num=?, anagrafica=?, imponibile=?, 
+                                       iva_perc=?, ritenuta_perc=?, socio=?, costo_categoria=?, cantiere=?, pagata=? 
+                                       WHERE id=?""",
+                                    (
+                                        nuova_data.strip(),
+                                        nuovo_tipo,
+                                        nuovo_num.strip(),
+                                        nuova_anag.strip().upper(),
+                                        nuovo_imp,
+                                        nuova_iva,
+                                        nuova_rit,
+                                        nuovo_socio,
+                                        nuova_cat,
+                                        nuovo_cant.strip().upper() or "GENERALE",
+                                        1 if nuova_pagata else 0,
+                                        id_scelto
+                                    )
                                 )
-                                st.success(f"✅ Fattura ID {id_scelto} aggiornata!")
+                                st.success("✅ Fattura aggiornata con successo!")
                                 st.rerun()
-
+                
                 with col_del:
-                    with st.expander("🗑️ CANCELLA QUESTA FATTURA", expanded=True):
-                        st.warning(f"Stai per eliminare la fattura **ID {id_scelto}** ({riga['anagrafica']}).")
-                        if st.button("🗑️ Cancella Definitivamente"):
-                            esegui_query("DELETE FROM fatture WHERE id=:id", {"id": int(id_scelto)})
-                            st.success(f"🗑️ Fattura ID {id_scelto} eliminata!")
+                    with st.expander("🗑️ ELIMINA QUESTA FATTURA", expanded=False):
+                        st.warning(f"Stai per eliminare definitivamente la fattura **n.{riga['num']}** di **{riga['anagrafica']}**.")
+                        if st.button("🚨 Conferma Eliminazione", type="primary"):
+                            esegui_query("DELETE FROM fatture WHERE id=?", (id_scelto,))
+                            st.success("🗑️ Fattura eliminata!")
                             st.rerun()
-            else:
-                st.info("Nessuna fattura trovata con i criteri di ricerca inseriti.")
         else:
-            st.warning("Nessun movimento registrato.")
+            st.info("Nessuna fattura registrata nel database.")
     with tab2:
-        st.info("💡 **Caricamento rapido:** Trascina qui una Fattura Elettronica (.xml) scaricata da Aruba per compilare i campi in automatico.")
-        file_xml = st.file_uploader("📂 Carica file fattura (.xml)", type=["xml"])
-        dati_xml = leggi_xml_fattura(file_xml) if file_xml else None
+        st.subheader("➕ Registra una Nuova Fattura")
+        
+        file_xml = st.file_uploader("📂 Carica file XML Fattura Elettronica (opzionale)", type=["xml"])
+        dati_xml = leggi_xml_fattura(file_xml) if file_xml else {}
         if dati_xml:
-            st.success(f"✅ Dati estratti dal file XML: **{dati_xml['anagrafica']}** (Doc. n. {dati_xml['num']} - € {dati_xml['imponibile']:,.2f})")
+            st.success(f"Dati estratti da XML: {dati_xml['tipo']} n.{dati_xml['num']} - {dati_xml['anagrafica']}")
 
-        nomi_rubrica = ottieni_nomi_rubrica(["CLIENTE", "FORNITORE"])
-        with st.form("nuova_fattura"):
-            c1, c2, c3 = st.columns(3)
-            data_default = dati_xml["data"] if dati_xml else date.today()
-            data_doc = c1.date_input("Data", value=data_default)
-            
-            tipi_opz = ("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA", "NOTA DI CREDITO")
-            idx_tipo = tipi_opz.index(dati_xml["tipo"]) if (dati_xml and dati_xml["tipo"] in tipi_opz) else 0
-            tipo_doc = c2.selectbox("Tipo Documento", options=tipi_opz, index=idx_tipo)
-            
-            num_default = dati_xml["num"] if dati_xml else ""
-            num_doc = c3.text_input("Numero Documento (es. 71/2026 o Polizza)", value=num_default)
-            
-            c4, c5 = st.columns(2)
-            anag_scelta = c4.selectbox("Scegli da Rubrica (oppure scrivi a destra)", options=["-- Scrivi nuovo nome --"] + nomi_rubrica)
-            anag_default = dati_xml["anagrafica"] if dati_xml else ""
-            anag_nuova = c5.text_input("Nuovo Cliente / Fornitore / Compagnia Assic.", value=anag_default)
-            
-            c6, c7, c8 = st.columns(3)
-            imp_default = dati_xml["imponibile"] if dati_xml else 0.0
-            imponibile = c6.number_input("Imponibile (€)", min_value=0.0, value=imp_default, step=10.0)
-            
-            iva_opz = (22, 10, 5, 4, 0)
-            idx_iva = iva_opz.index(dati_xml["iva"]) if (dati_xml and dati_xml["iva"] in iva_opz) else 0
-            iva_perc = c7.selectbox("IVA % (0% per Assicurazioni)", options=iva_opz, index=idx_iva)
-            
-            socio = c8.selectbox("Socio", options=("BAGLI", "TROPEA", "COMUNE"))
-            
-            c9, c10 = st.columns(2)
-            ritenuta = c9.number_input("Ritenuta %", min_value=0.0, max_value=100.0, value=0.0)
-            categoria = c10.selectbox("Categoria Costo/Ricavo", options=CATEGORIE_COSTI)
+        nomi_rubrica = ottieni_nomi_rubrica() if callable(ottieni_nomi_rubrica) else []
 
-            ca1, ca2 = st.columns(2)
-            cant_scelto = ca1.selectbox("🏗️ Cantiere (esistente)", options=lista_cantieri)
-            cant_nuovo = ca2.text_input("Oppure scrivi nuovo Cantiere", placeholder="Es. Cantiere Mascalucia")
-            
-            col_chk1, col_chk2, col_chk3 = st.columns(3)
-            gia_pagata = col_chk1.checkbox("Già pagata / incassata?", value=True)
-            salva_in_rubrica = col_chk2.checkbox("Salva nuovo nome in Rubrica", value=True)
-            ignora_doppione = col_chk3.checkbox("Forza salvataggio se doppione", value=False)
-            
-            if st.form_submit_button("➕ Registra Movimento", type="primary"):
-                anag_finale = anag_nuova.strip().upper() if anag_nuova.strip() else (anag_scelta if anag_scelta != "-- Scrivi nuovo nome --" else "")
-                cant_finale = cant_nuovo.strip().upper() if cant_nuovo.strip() else cant_scelto
-                num_pulito = num_doc.strip()
-                anno_doc = str(data_doc)[:4]
-                
-                is_doppione = False
-                if not df_all.empty and num_pulito and anag_finale:
-                    stesso_num = df_all["num"].astype(str).str.strip().str.upper() == num_pulito.upper()
-                    stessa_anag = df_all["anagrafica"].astype(str).str.strip().str.upper() == anag_finale
-                    stesso_anno = df_all["data"].astype(str).str.startswith(anno_doc)
-                    if (stesso_num & stessa_anag & stesso_anno).any():
-                        is_doppione = True
-                
-                if is_doppione and not ignora_doppione:
-                    st.warning(f"⚠️ **Attenzione:** Risulta già registrato il documento **n. {num_pulito}** di **{anag_finale}** nel **{anno_doc}**! Se sei sicuro di volerlo inserire comunque, spunta *'Forza salvataggio se doppione'* e clicca di nuovo.")
+        with st.form("form_nuova_fattura"):
+            c1, c2 = st.columns(2)
+            ins_data = c1.date_input("Data Documento", value=dati_xml.get("data", date.today()))
+            tipi_ins = ("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA", "NOTA DI CREDITO")
+            idx_ins_t = tipi_ins.index(dati_xml["tipo"]) if dati_xml.get("tipo") in tipi_ins else 0
+            ins_tipo = c2.selectbox("Tipo Documento", options=tipi_ins, index=idx_ins_t)
+
+            c3, c4 = st.columns(2)
+            ins_num = c3.text_input("Numero Documento", value=dati_xml.get("num", ""))
+            ins_anag = c4.text_input("Cliente / Fornitore", value=dati_xml.get("anagrafica", ""), placeholder="Ragione sociale...")
+
+            c5, c6, c7 = st.columns(3)
+            ins_imp = c5.number_input("Imponibile (€)", value=float(dati_xml.get("imponibile", 0.0)), step=10.0)
+            ins_iva = c6.number_input("Aliquota IVA %", value=float(dati_xml.get("iva", 22)), step=1.0)
+            ins_rit = c7.number_input("Ritenuta d'acconto %", value=0.0, step=1.0)
+
+            c8, c9, c10 = st.columns(3)
+            ins_socio = c8.selectbox("Socio di riferimento", options=("BAGLI", "TROPEA", "COMUNE"))
+            ins_cat = c9.selectbox("Categoria Costo/Ricavo", options=CATEGORIE_COSTI)
+            ins_cant = c10.text_input("Cantiere", value="GENERALE")
+
+            ins_pagata = st.checkbox("Già Pagata / Incassata", value=True)
+
+            if st.form_submit_button("💾 Registra Fattura", type="primary"):
+                if not ins_num.strip() or not ins_anag.strip():
+                    st.error("⚠️ Inserisci almeno il numero e il cliente/fornitore.")
                 else:
                     esegui_query(
-                        '''INSERT INTO fatture (data, tipo, num, anagrafica, imponibile, iva_perc, socio, ritenuta_perc, costo_categoria, cantiere, pagata) 
-                           VALUES (:d, :t, :n, :a, :i, :iv, :s, :r, :c, :ca, :p)''',
-                        {"d": str(data_doc), "t": tipo_doc, "n": num_pulito, "a": anag_finale,
-                         "i": imponibile, "iv": iva_perc, "s": socio, "r": ritenuta, "c": categoria, "ca": cant_finale, "p": int(gia_pagata)}
+                        """INSERT INTO fatture (data, tipo, num, anagrafica, imponibile, iva_perc, ritenuta_perc, socio, costo_categoria, cantiere, pagata)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            str(ins_data),
+                            ins_tipo,
+                            ins_num.strip(),
+                            ins_anag.strip().upper(),
+                            ins_imp,
+                            ins_iva,
+                            ins_rit,
+                            ins_socio,
+                            ins_cat,
+                            ins_cant.strip().upper() or "GENERALE",
+                            1 if ins_pagata else 0
+                        )
                     )
-                    
-                    if salva_in_rubrica and anag_nuova.strip() and anag_finale not in [n.upper() for n in nomi_rubrica]:
-                        tipo_rub = "CLIENTE" if "EMESSA" in tipo_doc else "FORNITORE"
-                        try:
-                            esegui_query(
-                                "INSERT INTO rubrica (nome, tipo) VALUES (:n, :t)",
-                                {"n": anag_finale, "t": tipo_rub}
-                            )
-                        except Exception:
-                            pass
-                            
-                    st.success("✅ Registrazione inserita su Cloud!")
+                    st.success("✅ Nuova fattura salvata nel database!")
                     st.rerun()
 
 
