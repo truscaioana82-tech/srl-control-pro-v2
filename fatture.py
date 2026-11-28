@@ -102,7 +102,7 @@ def mostra_prima_nota():
                 df_all["cantiere"] = "GENERALE"
             df_all["cantiere"] = df_all["cantiere"].fillna("GENERALE").replace("", "GENERALE").astype(str).str.upper()
             
-            st.subheader("1. Elenco Movimenti")
+            st.subheader("1. Elenco Movimenti (Doppio clic sulle celle per modificare)")
             
             col_cerca, col_tipo, col_socio, col_cant = st.columns([2, 1.2, 1, 1.2])
             
@@ -147,157 +147,85 @@ def mostra_prima_nota():
                 filtro_nome = df_filtrato["anagrafica"].astype(str).str.contains(cerca, case=False, na=False)
                 df_filtrato = df_filtrato[filtro_num | filtro_nome]
             
-            st.dataframe(df_filtrato, use_container_width=True, hide_index=True)
+            # Griglia modificabile direttamente
+            df_modificato = st.data_editor(
+                df_filtrato,
+                use_container_width=True,
+                hide_index=True,
+                key="griglia_fatture",
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", disabled=True),
+                    "data": st.column_config.TextColumn("Data"),
+                    "tipo": st.column_config.SelectboxColumn(
+                        "Tipo",
+                        options=["FATTURA EMESSA", "FATTURA ACQUISTO", "EMESSA", "RICEVUTA", "NOTA DI CREDITO"],
+                        required=True
+                    ),
+                    "num": st.column_config.TextColumn("Numero"),
+                    "anagrafica": st.column_config.TextColumn("Cliente / Fornitore"),
+                    "imponibile": st.column_config.NumberColumn("Imponibile (€)", format="%.2f"),
+                    "iva_perc": st.column_config.NumberColumn("IVA %"),
+                    "ritenuta_perc": st.column_config.NumberColumn("Ritenuta %"),
+                    "socio": st.column_config.SelectboxColumn(
+                        "Socio",
+                        options=["BAGLI", "TROPEA", "COMUNE"],
+                        required=True
+                    ),
+                    "costo_categoria": st.column_config.SelectboxColumn(
+                        "Categoria",
+                        options=list(CATEGORIE_COSTI),
+                        required=True
+                    ),
+                    "cantiere": st.column_config.TextColumn("Cantiere"),
+                    "pagata": st.column_config.CheckboxColumn("Pagata")
+                }
+            )
+
+            # Salva solo le righe effettivamente modificate nella griglia
+            modifiche = st.session_state.get("griglia_fatture", {}).get("edited_rows", {})
+            if modifiche:
+                if st.button(f"💾 Salva Modifiche dalla Griglia ({len(modifiche)} righe)", type="primary"):
+                    for idx_riga, campi_mod in modifiche.items():
+                        riga_aggiornata = df_modificato.iloc[int(idx_riga)]
+                        esegui_query(
+                            """UPDATE fatture SET data=?, tipo=?, num=?, anagrafica=?, imponibile=?, 
+                               iva_perc=?, ritenuta_perc=?, socio=?, costo_categoria=?, cantiere=?, pagata=? 
+                               WHERE id=?""",
+                            (
+                                str(riga_aggiornata["data"]).strip(),
+                                str(riga_aggiornata["tipo"]),
+                                str(riga_aggiornata["num"]).strip(),
+                                str(riga_aggiornata["anagrafica"]).strip().upper(),
+                                float(riga_aggiornata["imponibile"]),
+                                float(riga_aggiornata["iva_perc"]),
+                                float(riga_aggiornata.get("ritenuta_perc", 0.0) or 0.0),
+                                str(riga_aggiornata["socio"]).upper(),
+                                str(riga_aggiornata["costo_categoria"]),
+                                str(riga_aggiornata["cantiere"]).strip().upper() or "GENERALE",
+                                1 if riga_aggiornata["pagata"] else 0,
+                                int(riga_aggiornata["id"])
+                            )
+                        )
+                    st.success("✅ Tutte le modifiche dalla griglia sono state salvate!")
+                    st.rerun()
             
-            if not df_filtrato.empty:
-                t_up = df_filtrato["tipo"].astype(str).str.upper()
+            if not df_modificato.empty:
+                t_up = df_modificato["tipo"].astype(str).str.upper()
                 mask_emesse = t_up.isin(["EMESSA", "FATTURA EMESSA"])
                 mask_acquisti = t_up.isin(["RICEVUTA", "FATTURA ACQUISTO"])
                 mask_nc = t_up == "NOTA DI CREDITO"
 
-                imp_emesse = df_filtrato.loc[mask_emesse, "imponibile"].sum()
-                imp_acquisti = df_filtrato.loc[mask_acquisti, "imponibile"].sum()
-                imp_nc = df_filtrato.loc[mask_nc, "imponibile"].sum()
+                imp_emesse = df_modificato.loc[mask_emesse, "imponibile"].sum()
+                imp_acquisti = df_modificato.loc[mask_acquisti, "imponibile"].sum()
+                imp_nc = df_modificato.loc[mask_nc, "imponibile"].sum()
 
-                iva_emesse = (df_filtrato.loc[mask_emesse, "imponibile"] * (df_filtrato.loc[mask_emesse, "iva_perc"] / 100)).sum()
-                iva_acquisti = (df_filtrato.loc[mask_acquisti, "imponibile"] * (df_filtrato.loc[mask_acquisti, "iva_perc"] / 100)).sum()
+                iva_emesse = (df_modificato.loc[mask_emesse, "imponibile"] * (df_modificato.loc[mask_emesse, "iva_perc"] / 100)).sum()
+                iva_acquisti = (df_modificato.loc[mask_acquisti, "imponibile"] * (df_modificato.loc[mask_acquisti, "iva_perc"] / 100)).sum()
 
                 t1, t2, t3, t4 = st.columns(4)
-                t1.metric("📄 Fatture trovate", f"{len(df_filtrato)}")
+                t1.metric("📄 Fatture trovate", f"{len(df_modificato)}")
                 t2.metric("📈 Imponibile Emesse", f"€ {imp_emesse:,.2f}", delta=f"IVA: € {iva_emesse:,.2f}", delta_color="off")
                 t3.metric("📉 Imponibile Acquisti", f"€ {imp_acquisti:,.2f}", delta=f"IVA: € {iva_acquisti:,.2f}", delta_color="off")
                 t4.metric("⚖️ Saldo Imponibile", f"€ {(imp_emesse - imp_acquisti - imp_nc):,.2f}")
-            st.divider()
-            st.subheader("2. Seleziona una fattura da Modificare o Cancellare")
-            
-            if not df_filtrato.empty:
-                opzioni = {
-                    int(row["id"]): f"ID {int(row['id'])} | {row['data']} | {row['tipo']} n.{row['num']} - {row['anagrafica']} [{row['cantiere']}] (€ {row['imponibile']})"
-                    for _, row in df_filtrato.iterrows()
-                }
-                id_scelto = st.selectbox("Scegli la fattura:", options=list(opzioni.keys()), format_func=lambda x: opzioni[x])
-                id_scelto = int(id_scelto)
-                riga = df_all.set_index("id").loc[id_scelto]
-                
-                col_mod, col_del = st.columns(2)
-                
-                with col_mod:
-                    with st.expander("✏️ MODIFICA QUESTA FATTURA", expanded=True):
-                        with st.form("form_modifica"):
-                            m1, m2 = st.columns(2)
-                            nuova_data = m1.text_input("Data (AAAA-MM-GG)", value=str(riga["data"]))
-                            tipi = ("FATTURA EMESSA", "FATTURA ACQUISTO", "EMESSA", "RICEVUTA", "NOTA DI CREDITO")
-                            idx_t = tipi.index(riga["tipo"]) if riga["tipo"] in tipi else 0
-                            nuovo_tipo = m2.selectbox("Tipo", options=tipi, index=idx_t)
-                            
-                            m3, m4 = st.columns(2)
-                            nuovo_num = m3.text_input("Numero", value=str(riga["num"]))
-                            nuova_anag = m4.text_input("Cliente / Fornitore", value=str(riga["anagrafica"]))
-                            
-                            m5, m6, m7 = st.columns(3)
-                            nuovo_imp = m5.number_input("Imponibile (€)", value=float(riga["imponibile"]), step=10.0)
-                            nuova_iva = m6.number_input("IVA %", value=float(riga["iva_perc"]), step=1.0)
-                            nuova_rit = m7.number_input("Ritenuta %", value=float(riga.get("ritenuta_perc", 0.0)), step=1.0)
-                            
-                            m8, m9, m10 = st.columns(3)
-                            soci = ("BAGLI", "TROPEA", "COMUNE")
-                            idx_s = soci.index(str(riga["socio"]).upper()) if str(riga["socio"]).upper() in soci else 0
-                            nuovo_socio = m8.selectbox("Socio", options=soci, index=idx_s)
-                            
-                            cat_attuale = str(riga.get("costo_categoria", "Generale"))
-                            idx_c = CATEGORIE_COSTI.index(cat_attuale) if cat_attuale in CATEGORIE_COSTI else 0
-                            nuova_cat = m9.selectbox("Categoria", options=CATEGORIE_COSTI, index=idx_c)
-                            nuovo_cant = m10.text_input("Cantiere", value=str(riga["cantiere"]))
-                            
-                            nuova_pagata = st.checkbox("Fattura Pagata / Incassata", value=bool(riga.get("pagata", True)))
-                            
-                            if st.form_submit_button("💾 Salva Modifiche", type="primary"):
-                                esegui_query(
-                                    """UPDATE fatture SET data=?, tipo=?, num=?, anagrafica=?, imponibile=?, 
-                                       iva_perc=?, ritenuta_perc=?, socio=?, costo_categoria=?, cantiere=?, pagata=? 
-                                       WHERE id=?""",
-                                    (
-                                        nuova_data.strip(),
-                                        nuovo_tipo,
-                                        nuovo_num.strip(),
-                                        nuova_anag.strip().upper(),
-                                        float(nuovo_imp),
-                                        float(nuova_iva),
-                                        float(nuova_rit),
-                                        nuovo_socio,
-                                        nuova_cat,
-                                        nuovo_cant.strip().upper() or "GENERALE",
-                                        1 if nuova_pagata else 0,
-                                        int(id_scelto)
-                                    )
-                                )
-                                st.success("✅ Fattura aggiornata con successo!")
-                                st.rerun()
-                
-                with col_del:
-                    with st.expander("🗑️ ELIMINA QUESTA FATTURA", expanded=False):
-                        st.warning(f"Stai per eliminare definitivamente la fattura **n.{riga['num']}** di **{riga['anagrafica']}**.")
-                        if st.button("🚨 Conferma Eliminazione", type="primary"):
-                            esegui_query("DELETE FROM fatture WHERE id=?", (int(id_scelto),))
-                            st.success("🗑️ Fattura eliminata!")
-                            st.rerun()
-        else:
-            st.info("Nessuna fattura registrata nel database.")
 
-    with tab2:
-        st.subheader("➕ Registra una Nuova Fattura")
-        
-        file_xml = st.file_uploader("📂 Carica file XML Fattura Elettronica (opzionale)", type=["xml"])
-        dati_xml = leggi_xml_fattura(file_xml) if file_xml else {}
-        if dati_xml:
-            st.success(f"Dati estratti da XML: {dati_xml['tipo']} n.{dati_xml['num']} - {dati_xml['anagrafica']}")
-
-        nomi_rubrica = ottieni_nomi_rubrica() if callable(ottieni_nomi_rubrica) else []
-
-        with st.form("form_nuova_fattura"):
-            c1, c2 = st.columns(2)
-            ins_data = c1.date_input("Data Documento", value=dati_xml.get("data", date.today()))
-            tipi_ins = ("FATTURA EMESSA", "FATTURA ACQUISTO", "RICEVUTA", "NOTA DI CREDITO")
-            idx_ins_t = tipi_ins.index(dati_xml["tipo"]) if dati_xml.get("tipo") in tipi_ins else 0
-            ins_tipo = c2.selectbox("Tipo Documento", options=tipi_ins, index=idx_ins_t)
-
-            c3, c4 = st.columns(2)
-            ins_num = c3.text_input("Numero Documento", value=dati_xml.get("num", ""))
-            ins_anag = c4.text_input("Cliente / Fornitore", value=dati_xml.get("anagrafica", ""), placeholder="Ragione sociale...")
-
-            c5, c6, c7 = st.columns(3)
-            ins_imp = c5.number_input("Imponibile (€)", value=float(dati_xml.get("imponibile", 0.0)), step=10.0)
-            ins_iva = c6.number_input("Aliquota IVA %", value=float(dati_xml.get("iva", 22)), step=1.0)
-            ins_rit = c7.number_input("Ritenuta d'acconto %", value=0.0, step=1.0)
-
-            c8, c9, c10 = st.columns(3)
-            ins_socio = c8.selectbox("Socio di riferimento", options=("BAGLI", "TROPEA", "COMUNE"))
-            ins_cat = c9.selectbox("Categoria Costo/Ricavo", options=CATEGORIE_COSTI)
-            ins_cant = c10.text_input("Cantiere", value="GENERALE")
-
-            ins_pagata = st.checkbox("Già Pagata / Incassata", value=True)
-
-            if st.form_submit_button("💾 Registra Fattura", type="primary"):
-                if not ins_num.strip() or not ins_anag.strip():
-                    st.error("⚠️ Inserisci almeno il numero e il cliente/fornitore.")
-                else:
-                    esegui_query(
-                        """INSERT INTO fatture (data, tipo, num, anagrafica, imponibile, iva_perc, ritenuta_perc, socio, costo_categoria, cantiere, pagata)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            str(ins_data),
-                            ins_tipo,
-                            ins_num.strip(),
-                            ins_anag.strip().upper(),
-                            float(ins_imp),
-                            float(ins_iva),
-                            float(ins_rit),
-                            ins_socio,
-                            ins_cat,
-                            ins_cant.strip().upper() or "GENERALE",
-                            1 if ins_pagata else 0
-                        )
-                    )
-                    st.success("✅ Fattura registrata con successo!")
-                    st.rerun()
 
