@@ -334,6 +334,26 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     doc.build(story)
     buffer_pdf.seek(0)
     return buffer_pdf.getvalue()
+def inizializza_voci_salvate():
+    esegui_query(
+        """CREATE TABLE IF NOT EXISTS voci_preventivo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            descrizione TEXT NOT NULL,
+            unita_misura TEXT,
+            prezzo_unitario REAL DEFAULT 0.0
+        )"""
+    )
+
+
+def carica_voci_salvate():
+    inizializza_voci_salvate()
+    try:
+        df = carica_tabella("voci_preventivo")
+        return df if df is not None else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+
 def tabella_da_testo(testo_desc):
     righe = []
     for riga in str(testo_desc or "").strip().split("\n"):
@@ -389,9 +409,10 @@ def testo_da_tabella(df_righe):
 
 def mostra_preventivi():
     st.title("📋 Gestione Preventivi")
-    tab1, tab2 = st.tabs(("📂 Archivio, Anteprima & PDF", "➕ Nuovo Preventivo"))
+    tab1, tab2, tab3 = st.tabs(("📂 Archivio, Anteprima & PDF", "➕ Nuovo Preventivo", "📚 Descrizioni Salvate"))
 
     df_all = carica_tabella("preventivi")
+    df_voci = carica_voci_salvate()
     percorso_logo = trova_logo()
 
     with tab1:
@@ -513,6 +534,11 @@ def mostra_preventivi():
         st.subheader("➕ Crea Nuovo Preventivo (con Anteprima Live)")
         num_suggerito = genera_numero_progressivo(df_all)
 
+        if "righe_nuovo_prev" not in st.session_state:
+            st.session_state["righe_nuovo_prev"] = pd.DataFrame((
+                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+            ))
+
         col_form, col_live = st.columns((1.15, 1.1))
 
         with col_form:
@@ -524,14 +550,35 @@ def mostra_preventivi():
             n_ind = c3.text_input("Indirizzo / Cantiere", placeholder="Es. Via Roma 10, Riposto")
             n_tel = c4.text_input("Telefono", placeholder="Es. 333 1234567")
 
-            st.markdown("**Righi Lavorazioni** *(inserisci i dati nelle celle; clicca sull'ultima riga vuota per aggiungerne altri)*")
-            df_vuoto = pd.DataFrame((
-                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
-                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
-                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
-            ))
+            # Selettore rapido dalle descrizioni salvate
+            if not df_voci.empty:
+                st.markdown("**📚 Inserisci una descrizione salvata**")
+                v_col1, v_col2, v_col3 = st.columns((2.2, 0.8, 1.0))
+                opz_voci = {
+                    int(v["id"]): f"{v['descrizione']} (€ {float(v.get('prezzo_unitario') or 0):,.2f}/{v.get('unita_misura') or 'cad'})"
+                    for _, v in df_voci.iterrows()
+                }
+                voce_scelta = v_col1.selectbox("Scegli lavorazione:", options=tuple(opz_voci.keys()), format_func=lambda x: opz_voci[x], label_visibility="collapsed")
+                qta_scelta = v_col2.text_input("Misure", placeholder="Es. 45 mq", label_visibility="collapsed")
+                if v_col3.button("➕ Inserisci Rigo", use_container_width=True):
+                    riga_v = df_voci.set_index("id").loc[voce_scelta]
+                    pu_v = float(riga_v.get("prezzo_unitario") or 0.0)
+                    mis_txt = qta_scelta.strip() or str(riga_v.get("unita_misura") or "")
+                    nuova_riga = pd.DataFrame(({
+                        "Descrizione": str(riga_v["descrizione"]),
+                        "Misure": mis_txt,
+                        "Prezzo Unit. (€)": pu_v,
+                        "Totale (€)": 0.0,
+                    },))
+                    df_corr = st.session_state["righe_nuovo_prev"]
+                    # Rimuove eventuali righe completamente vuote prima di accodare
+                    df_corr = df_corr[df_corr["Descrizione"].astype(str).str.strip() != ""]
+                    st.session_state["righe_nuovo_prev"] = pd.concat((df_corr, nuova_riga), ignore_index=True)
+                    st.rerun()
+
+            st.markdown("**Righi Lavorazioni** *(scrivi nelle celle o aggiungi righe in basso)*")
             df_nuovo_edit = st.data_editor(
-                df_vuoto,
+                st.session_state["righe_nuovo_prev"],
                 num_rows="dynamic",
                 use_container_width=True,
                 key="ed_nuovo_prev",
@@ -551,7 +598,7 @@ def mostra_preventivi():
                 step=50.0,
             )
 
-            b1, b2 = st.columns(2)
+            b1, b2, b3 = st.columns((1.1, 1.1, 0.8))
             with b1:
                 if st.button("💾 Salva in Archivio", type="primary", use_container_width=True):
                     if not n_cli.strip():
@@ -570,6 +617,9 @@ def mostra_preventivi():
                                 "importo": n_imp,
                             },
                         )
+                        st.session_state["righe_nuovo_prev"] = pd.DataFrame((
+                            {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+                        ))
                         st.success("✅ Preventivo salvato con successo!")
                         st.rerun()
 
@@ -585,12 +635,19 @@ def mostra_preventivi():
                 }
                 pdf_bozza = genera_pdf_bytes(dati_bozza, percorso_logo)
                 st.download_button(
-                    label="📥 Scarica PDF Subito",
+                    label="📥 Scarica PDF",
                     data=pdf_bozza,
                     file_name=f"Preventivo_{n_num.replace('/', '_')}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                 )
+
+            with b3:
+                if st.button("🧹 Svuota", use_container_width=True):
+                    st.session_state["righe_nuovo_prev"] = pd.DataFrame((
+                        {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+                    ))
+                    st.rerun()
 
         with col_live:
             st.markdown("#### 👁️ Anteprima in Tempo Reale")
@@ -603,4 +660,45 @@ def mostra_preventivi():
                 descrizione=n_desc_str,
                 importo_val=n_imp,
             )
+
+    with tab3:
+        st.subheader("📚 Gestione Descrizioni Salvate (Listino Rapido)")
+        st.caption("Salva qui le lavorazioni che usi più spesso per richiamarle con un clic quando crei un preventivo.")
+
+        with st.form("form_nuova_voce"):
+            v1, v2, v3 = st.columns((2.5, 0.8, 0.9))
+            nuova_desc = v1.text_input("Descrizione Lavorazione", placeholder="Es. Fornitura e posa parete in cartongesso doppia lastra")
+            nuova_um = v2.text_input("Unità di misura", placeholder="Es. mq / ml / corpo")
+            nuovo_pu = v3.number_input("Prezzo Unit. (€)", min_value=0.0, step=1.0)
+
+            if st.form_submit_button("💾 Memorizza Descrizione", type="primary"):
+                if not nuova_desc.strip():
+                    st.error("⚠️ Inserisci il testo della descrizione.")
+                else:
+                    esegui_query(
+                        """INSERT INTO voci_preventivo (descrizione, unita_misura, prezzo_unitario)
+                           VALUES (:desc, :um, :pu)""",
+                        {"desc": nuova_desc.strip(), "um": nuova_um.strip(), "pu": nuovo_pu},
+                    )
+                    st.success("✅ Descrizione memorizzata!")
+                    st.rerun()
+
+        st.divider()
+        if not df_voci.empty:
+            st.markdown("### Elenco Descrizioni Memorizzate")
+            st.dataframe(df_voci, use_container_width=True, hide_index=True)
+
+            opz_del_v = {
+                int(v["id"]): f"ID {int(v['id'])} - {v['descrizione']} (€ {float(v.get('prezzo_unitario') or 0):,.2f})"
+                for _, v in df_voci.iterrows()
+            }
+            c_del1, c_del2 = st.columns((2.5, 1))
+            id_v_del = c_del1.selectbox("Seleziona una descrizione da eliminare:", options=tuple(opz_del_v.keys()), format_func=lambda x: opz_del_v[x])
+            if c_del2.button("🗑️ Elimina Descrizione", use_container_width=True):
+                esegui_query("DELETE FROM voci_preventivo WHERE id = :id", {"id": id_v_del})
+                st.success("🗑️ Descrizione eliminata!")
+                st.rerun()
+        else:
+            st.info("Non hai ancora memorizzato nessuna descrizione. Usa il modulo qui sopra per aggiungere la prima!")
+
 
