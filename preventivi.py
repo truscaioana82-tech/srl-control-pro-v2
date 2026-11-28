@@ -31,7 +31,7 @@ def logo_in_base64():
         try:
             with open(percorso, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
-            ext = os.path.splitext(percorso).lower().replace(".", "")
+            ext = os.path.splitext(percorso)[1].lower().replace(".", "")
             if ext == "jpg":
                 ext = "jpeg"
             return f"data:image/{ext};base64,{b64}"
@@ -67,10 +67,10 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
         if len(parti) >= 4:
             righe_html += (
                 f"<tr>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;'>{parti}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>{parti}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;'>{parti[0]}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>{parti[1]}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti[2]}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti[3]}</td>"
                 f"</tr>"
             )
         else:
@@ -224,7 +224,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     badge_tab = Table(
         [[Paragraph(f"PREVENTIVO N. {num_doc}", s_badge_titolo)],
          [Paragraph(f"Data: {data_formattata}", s_badge_sub)]],
-        colWidths=
+        colWidths=[165]
     )
     badge_tab.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), BLU_LOGO),
@@ -233,7 +233,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
     ]))
 
-    header_tab = Table([[logo_cell, badge_tab]], colWidths=)
+    header_tab = Table([[logo_cell, badge_tab]], colWidths=[374, 165])
     header_tab.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (1, 0), (1, 0), "RIGHT"),
@@ -252,7 +252,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     cliente_tab = Table(
         [[Paragraph("SPETT.LE CLIENTE", s_spett_label)],
          [Paragraph(testo_cliente, s_spett_val)]],
-        colWidths=
+        colWidths=[539]
     )
     cliente_tab.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), BLU_CHIARO),
@@ -277,10 +277,10 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         parti = [p.strip() for p in riga.split("|")]
         if len(parti) >= 4:
             dati_tab.append([
-                Paragraph(parti, s_cell),
-                Paragraph(parti, s_cell_c),
-                Paragraph(parti, s_cell_r),
-                Paragraph(parti, s_cell_r),
+                Paragraph(parti[0], s_cell),
+                Paragraph(parti[1], s_cell_c),
+                Paragraph(parti[2], s_cell_r),
+                Paragraph(parti[3], s_cell_r),
             ])
         else:
             dati_tab.append([
@@ -296,7 +296,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         Paragraph(importo_str, s_tot),
     ])
 
-    voci_tab = Table(dati_tab, colWidths=, repeatRows=1)
+    voci_tab = Table(dati_tab, colWidths=[289, 80, 85, 85], repeatRows=1)
     n_righe = len(dati_tab)
     voci_tab.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), BLU_LOGO),
@@ -315,7 +315,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
 
     cond_tab = Table(
         [[Paragraph("<b>NOTE E CONDIZIONI:</b> Gli importi indicati si intendono IVA esclusa ove applicabile. Validità offerta 30 giorni.", s_cond)]],
-        colWidths=
+        colWidths=[539]
     )
     cond_tab.setStyle(TableStyle([
         ("LINEBEFORE", (0, 0), (0, -1), 3, BLU_LOGO),
@@ -327,7 +327,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     footer_tab = Table(
         [[Paragraph("<b>CARTONGESSO &amp; COLOR GROUP S.r.l.</b><br/>Opere in Cartongesso, Controsoffitti e Tinteggiature", s_f_sx),
           Paragraph("Timbro e Firma per Accettazione<br/><br/>______________________________", s_f_dx)]],
-        colWidths=
+        colWidths=[270, 269]
     )
     footer_tab.setStyle(TableStyle([
         ("LINEABOVE", (0, 0), (-1, 0), 0.8, GRIGIO_BORDO),
