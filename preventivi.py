@@ -1,4 +1,3 @@
-
 import os
 import io
 import base64
@@ -31,7 +30,7 @@ def logo_in_base64():
         try:
             with open(percorso, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
-            ext = os.path.splitext(percorso).lower().replace(".", "")
+            ext = os.path.splitext(percorso)[1].lower().replace(".", "")
             if ext == "jpg":
                 ext = "jpeg"
             return f"data:image/{ext};base64,{b64}"
@@ -63,7 +62,7 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
         righe_valide += 1
         parti = tuple(p.strip() for p in riga.split("|"))
         if len(parti) >= 4:
-            p0, p1, p2, p3 = parti, parti, parti, parti
+            p0, p1, p2, p3 = parti[:4]
             righe_html += (
                 f"<tr>"
                 f"<td style='padding:7px;border:1px solid #d0d7de;'>{p0}</td>"
@@ -275,7 +274,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
             continue
         parti = tuple(p.strip() for p in riga.split("|"))
         if len(parti) >= 4:
-            p0, p1, p2, p3 = parti, parti, parti, parti
+            p0, p1, p2, p3 = parti[:4]
             righe_pdf.append((
                 Paragraph(p0, s_cell),
                 Paragraph(p1, s_cell_c),
@@ -361,10 +360,20 @@ def tabella_da_testo(testo_desc):
         if not riga.strip():
             continue
         parti = tuple(p.strip() for p in riga.split("|"))
-        desc = parti if len(parti) > 0 else ""
-        mis = parti if len(parti) > 1 else ""
-        pu_s = parti.replace("€", "").replace(".", "").replace(",", ".").strip() if len(parti) > 2 else "0"
-        tot_s = parti.replace("€", "").replace(".", "").replace(",", ".").strip() if len(parti) > 3 else "0"
+        if len(parti) >= 4:
+            desc, mis, pu_raw, tot_raw = parti[:4]
+        elif len(parti) == 3:
+            desc, mis, pu_raw = parti
+            tot_raw = "0"
+        elif len(parti) == 2:
+            desc, mis = parti
+            pu_raw, tot_raw = "0", "0"
+        else:
+            desc = parti[0] if parti else ""
+            mis, pu_raw, tot_raw = "", "0", "0"
+
+        pu_s = pu_raw.replace("€", "").replace(".", "").replace(",", ".").strip()
+        tot_s = tot_raw.replace("€", "").replace(".", "").replace(",", ".").strip()
         try:
             pu_v = float(pu_s)
         except ValueError:
@@ -697,4 +706,3 @@ def mostra_preventivi():
                 st.rerun()
         else:
             st.info("Non hai ancora memorizzato nessuna descrizione. Usa il modulo qui sopra per aggiungere la prima!")
-
