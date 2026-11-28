@@ -13,14 +13,13 @@ from PIL import Image as PILImage
 from database import carica_tabella, esegui_query
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SOCIO_1, SOCIO_2 = "BAGLI", "TROPEA"
 
 
 def trova_logo():
-    estensioni_valide = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
+    estensioni = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
     if os.path.exists(BASE_DIR):
         for file in os.listdir(BASE_DIR):
-            if "logo" in file.lower() and file.lower().endswith(estensioni_valide):
+            if "logo" in file.lower() and file.lower().endswith(estensioni):
                 return os.path.join(BASE_DIR, file)
     return None
 
@@ -31,7 +30,7 @@ def logo_in_base64():
         try:
             with open(percorso, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
-            ext = os.path.splitext(percorso)[1].lower().replace(".", "")
+            ext = os.path.splitext(percorso).lower().replace(".", "")
             if ext == "jpg":
                 ext = "jpeg"
             return f"data:image/{ext};base64,{b64}"
@@ -41,21 +40,19 @@ def logo_in_base64():
 
 
 def genera_numero_progressivo(df_all):
-    anno_corrente = datetime.now().year
-    suffisso = f"/{anno_corrente}"
+    anno = datetime.now().year
+    suff = f"/{anno}"
     max_num = 0
     if not df_all.empty and "num" in df_all.columns:
         for num_str in df_all["num"].dropna():
-            num_str = str(num_str).strip()
-            if num_str.endswith(suffisso):
-                parte_num = num_str[:-len(suffisso)].strip()
-                if parte_num.isdigit():
-                    max_num = max(max_num, int(parte_num))
-            elif num_str.isdigit():
-                max_num = max(max_num, int(num_str))
-    return f"{max_num + 1}/{anno_corrente}"
-
-
+            s = str(num_str).strip()
+            if s.endswith(suff):
+                parte = s[:-len(suff)].strip()
+                if parte.isdigit():
+                    max_num = max(max_num, int(parte))
+            elif s.isdigit():
+                max_num = max(max_num, int(s))
+    return f"{max_num + 1}/{anno}"
 def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telefono, descrizione, importo_val):
     righe_html = ""
     righe_valide = 0
@@ -63,14 +60,15 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
         if not riga.strip():
             continue
         righe_valide += 1
-        parti = [p.strip() for p in riga.split("|")]
+        parti = tuple(p.strip() for p in riga.split("|"))
         if len(parti) >= 4:
+            p0, p1, p2, p3 = parti, parti, parti, parti
             righe_html += (
                 f"<tr>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;'>{parti[0]}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>{parti[1]}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti[2]}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti[3]}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;'>{p0}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>{p1}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{p2}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{p3}</td>"
                 f"</tr>"
             )
         else:
@@ -180,9 +178,9 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     GRIGIO_BORDO = colors.HexColor("#d0d7de")
     GRIGIO_TESTO = colors.HexColor("#333333")
 
-    s_badge_titolo = ParagraphStyle("BadgeTit", fontName="Helvetica-Bold", fontSize=11, alignment=1, textColor=GIALLO_LOGO)
+    s_badge_tit = ParagraphStyle("BadgeTit", fontName="Helvetica-Bold", fontSize=11, alignment=1, textColor=GIALLO_LOGO)
     s_badge_sub = ParagraphStyle("BadgeSub", fontName="Helvetica-Bold", fontSize=9, alignment=1, textColor=colors.white)
-    s_spett_label = ParagraphStyle("SpettLbl", fontName="Helvetica-Bold", fontSize=8, textColor=BLU_LOGO)
+    s_spett_lbl = ParagraphStyle("SpettLbl", fontName="Helvetica-Bold", fontSize=8, textColor=BLU_LOGO)
     s_spett_val = ParagraphStyle("SpettVal", fontName="Helvetica", fontSize=9.5, leading=13, textColor=colors.black)
     s_cell = ParagraphStyle("Cell", fontName="Helvetica", fontSize=8.5, leading=11, textColor=colors.black)
     s_cell_c = ParagraphStyle("CellC", fontName="Helvetica", fontSize=8.5, leading=11, alignment=1, textColor=colors.black)
@@ -222,24 +220,24 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         )
 
     badge_tab = Table(
-        [[Paragraph(f"PREVENTIVO N. {num_doc}", s_badge_titolo)],
-         [Paragraph(f"Data: {data_formattata}", s_badge_sub)]],
-        colWidths=[165]
+        ((Paragraph(f"PREVENTIVO N. {num_doc}", s_badge_tit),),
+         (Paragraph(f"Data: {data_formattata}", s_badge_sub),)),
+        colWidths=(165,)
     )
-    badge_tab.setStyle(TableStyle([
+    badge_tab.setStyle(TableStyle((
         ("BACKGROUND", (0, 0), (-1, -1), BLU_LOGO),
         ("TOPPADDING", (0, 0), (-1, 0), 8),
         ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-    ]))
+    )))
 
-    header_tab = Table([[logo_cell, badge_tab]], colWidths=[374, 165])
-    header_tab.setStyle(TableStyle([
+    header_tab = Table(((logo_cell, badge_tab),), colWidths=(374, 165))
+    header_tab.setStyle(TableStyle((
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (1, 0), (1, 0), "RIGHT"),
         ("LINEBELOW", (0, 0), (-1, 0), 2, BLU_LOGO),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
-    ]))
+    )))
     story.append(header_tab)
     story.append(Spacer(1, 12))
 
@@ -250,55 +248,52 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         testo_cliente += f"<br/>Tel: {telefono}"
 
     cliente_tab = Table(
-        [[Paragraph("SPETT.LE CLIENTE", s_spett_label)],
-         [Paragraph(testo_cliente, s_spett_val)]],
-        colWidths=[539]
+        ((Paragraph("SPETT.LE CLIENTE", s_spett_lbl),),
+         (Paragraph(testo_cliente, s_spett_val),)),
+        colWidths=(539,)
     )
-    cliente_tab.setStyle(TableStyle([
+    cliente_tab.setStyle(TableStyle((
         ("BACKGROUND", (0, 0), (-1, -1), BLU_CHIARO),
         ("LINEBEFORE", (0, 0), (0, -1), 4, GIALLO_LOGO),
         ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, 0), 6),
         ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
-    ]))
+    )))
     story.append(cliente_tab)
     story.append(Spacer(1, 14))
 
-    dati_tab = [[
-        Paragraph("DESCRIZIONE LAVORAZIONI", s_th),
-        Paragraph("MISURE", s_th_c),
-        Paragraph("PREZZO UNIT.", s_th_r),
-        Paragraph("TOTALE", s_th_r),
-    ]]
+    righe_pdf = [
+        (Paragraph("DESCRIZIONE LAVORAZIONI", s_th),
+         Paragraph("MISURE", s_th_c),
+         Paragraph("PREZZO UNIT.", s_th_r),
+         Paragraph("TOTALE", s_th_r))
+    ]
 
     for riga in descrizione.strip().split("\n"):
         if not riga.strip():
             continue
-        parti = [p.strip() for p in riga.split("|")]
+        parti = tuple(p.strip() for p in riga.split("|"))
         if len(parti) >= 4:
-            dati_tab.append([
-                Paragraph(parti[0], s_cell),
-                Paragraph(parti[1], s_cell_c),
-                Paragraph(parti[2], s_cell_r),
-                Paragraph(parti[3], s_cell_r),
-            ])
+            p0, p1, p2, p3 = parti, parti, parti, parti
+            righe_pdf.append((
+                Paragraph(p0, s_cell),
+                Paragraph(p1, s_cell_c),
+                Paragraph(p2, s_cell_r),
+                Paragraph(p3, s_cell_r),
+            ))
         else:
-            dati_tab.append([
+            righe_pdf.append((
                 Paragraph(riga.strip(), s_cell),
                 Paragraph("-", s_cell_c),
                 Paragraph("-", s_cell_r),
                 Paragraph("-", s_cell_r),
-            ])
+            ))
 
-    dati_tab.append([
-        "", "",
-        Paragraph("TOTALE (€)", s_tot),
-        Paragraph(importo_str, s_tot),
-    ])
+    righe_pdf.append(("", "", Paragraph("TOTALE (€)", s_tot), Paragraph(importo_str, s_tot)))
 
-    voci_tab = Table(dati_tab, colWidths=[289, 80, 85, 85], repeatRows=1)
-    n_righe = len(dati_tab)
-    voci_tab.setStyle(TableStyle([
+    voci_tab = Table(tuple(righe_pdf), colWidths=(279, 80, 90, 90), repeatRows=1)
+    n_righe = len(righe_pdf)
+    voci_tab.setStyle(TableStyle((
         ("BACKGROUND", (0, 0), (-1, 0), BLU_LOGO),
         ("TOPPADDING", (0, 0), (-1, 0), 7),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
@@ -309,46 +304,99 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         ("BACKGROUND", (2, n_righe - 1), (3, n_righe - 1), GIALLO_LOGO),
         ("TOPPADDING", (2, n_righe - 1), (3, n_righe - 1), 7),
         ("BOTTOMPADDING", (2, n_righe - 1), (3, n_righe - 1), 7),
-    ]))
+    )))
     story.append(voci_tab)
     story.append(Spacer(1, 14))
 
     cond_tab = Table(
-        [[Paragraph("<b>NOTE E CONDIZIONI:</b> Gli importi indicati si intendono IVA esclusa ove applicabile. Validità offerta 30 giorni.", s_cond)]],
-        colWidths=[539]
+        ((Paragraph("<b>NOTE E CONDIZIONI:</b> Gli importi indicati si intendono IVA esclusa ove applicabile. Validità offerta 30 giorni.", s_cond),),),
+        colWidths=(539,)
     )
-    cond_tab.setStyle(TableStyle([
+    cond_tab.setStyle(TableStyle((
         ("LINEBEFORE", (0, 0), (0, -1), 3, BLU_LOGO),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    )))
     story.append(cond_tab)
     story.append(Spacer(1, 24))
 
     footer_tab = Table(
-        [[Paragraph("<b>CARTONGESSO &amp; COLOR GROUP S.r.l.</b><br/>Opere in Cartongesso, Controsoffitti e Tinteggiature", s_f_sx),
-          Paragraph("Timbro e Firma per Accettazione<br/><br/>______________________________", s_f_dx)]],
-        colWidths=[270, 269]
+        ((Paragraph("<b>CARTONGESSO &amp; COLOR GROUP S.r.l.</b><br/>Opere in Cartongesso, Controsoffitti e Tinteggiature", s_f_sx),
+          Paragraph("Timbro e Firma per Accettazione<br/><br/>______________________________", s_f_dx)),),
+        colWidths=(270, 269)
     )
-    footer_tab.setStyle(TableStyle([
+    footer_tab.setStyle(TableStyle((
         ("LINEABOVE", (0, 0), (-1, 0), 0.8, GRIGIO_BORDO),
         ("TOPPADDING", (0, 0), (-1, 0), 8),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
+    )))
     story.append(footer_tab)
 
     doc.build(story)
     buffer_pdf.seek(0)
     return buffer_pdf.getvalue()
+def tabella_da_testo(testo_desc):
+    righe = []
+    for riga in str(testo_desc or "").strip().split("\n"):
+        if not riga.strip():
+            continue
+        parti = tuple(p.strip() for p in riga.split("|"))
+        desc = parti if len(parti) > 0 else ""
+        mis = parti if len(parti) > 1 else ""
+        pu_s = parti.replace("€", "").replace(".", "").replace(",", ".").strip() if len(parti) > 2 else "0"
+        tot_s = parti.replace("€", "").replace(".", "").replace(",", ".").strip() if len(parti) > 3 else "0"
+        try:
+            pu_v = float(pu_s)
+        except ValueError:
+            pu_v = 0.0
+        try:
+            tot_v = float(tot_s)
+        except ValueError:
+            tot_v = 0.0
+        righe.append({"Descrizione": desc, "Misure": mis, "Prezzo Unit. (€)": pu_v, "Totale (€)": tot_v})
+    if not righe:
+        righe.append({"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0})
+    return pd.DataFrame(righe)
+
+
+def testo_da_tabella(df_righe):
+    linee = []
+    totale_gen = 0.0
+    if df_righe is not None and not df_righe.empty:
+        for _, r in df_righe.iterrows():
+            desc = str(r.get("Descrizione") or "").strip()
+            mis = str(r.get("Misure") or "").strip()
+            pu = float(r.get("Prezzo Unit. (€)") or 0.0)
+            tot = float(r.get("Totale (€)") or 0.0)
+
+            if tot == 0.0 and pu > 0.0 and mis:
+                num_mis = "".join(c for c in mis.replace(",", ".") if c.isdigit() or c == ".")
+                try:
+                    if num_mis:
+                        tot = round(float(num_mis) * pu, 2)
+                except ValueError:
+                    pass
+
+            if not desc and pu == 0.0 and tot == 0.0:
+                continue
+
+            totale_gen += tot
+            pu_fmt = f"€ {pu:,.2f}" if pu > 0 else "-"
+            tot_fmt = f"€ {tot:,.2f}" if tot > 0 else "-"
+            linee.append(f"{desc} | {mis or '-'} | {pu_fmt} | {tot_fmt}")
+
+    return "\n".join(linee), round(totale_gen, 2)
+
+
 def mostra_preventivi():
     st.title("📋 Gestione Preventivi")
-    tab1, tab2 = st.tabs(["📂 Archivio, Anteprima & PDF", "➕ Nuovo Preventivo"])
+    tab1, tab2 = st.tabs(("📂 Archivio, Anteprima & PDF", "➕ Nuovo Preventivo"))
 
     df_all = carica_tabella("preventivi")
     percorso_logo = trova_logo()
 
     with tab1:
         if not df_all.empty:
-            df_all = df_all.dropna(subset=["id"])
+            df_all = df_all.dropna(subset=("id",))
             df_all["id"] = df_all["id"].astype(int)
             df_all = df_all.sort_values(by="id", ascending=False)
 
@@ -371,10 +419,9 @@ def mostra_preventivi():
                     int(r["id"]): f"Preventivo n.{r['num']} | {r['data_doc']} | {r['cliente']} (€ {float(r.get('importo') or 0):,.2f})"
                     for _, r in df_vis.iterrows()
                 }
-                id_sel = st.selectbox("Seleziona preventivo:", options=list(opzioni.keys()), format_func=lambda x: opzioni[x])
+                id_sel = st.selectbox("Seleziona preventivo:", options=tuple(opzioni.keys()), format_func=lambda x: opzioni[x])
                 riga = df_all.set_index("id").loc[id_sel]
 
-                # Anteprima visiva
                 st.markdown("### 👁️ Anteprima Documento")
                 renderizza_anteprima_preventivo(
                     num_doc=riga["num"],
@@ -386,73 +433,87 @@ def mostra_preventivi():
                     importo_val=riga.get("importo", 0.0),
                 )
 
-                # Download PDF
                 pdf_bytes = genera_pdf_bytes(riga.to_dict(), percorso_logo)
-                nome_file_pdf = f"Preventivo_{str(riga['num']).replace('/', '_')}_{str(riga['cliente']).replace(' ', '_')}.pdf"
+                nome_pdf = f"Preventivo_{str(riga['num']).replace('/', '_')}_{str(riga['cliente']).replace(' ', '_')}.pdf"
                 st.download_button(
                     label="📥 Scarica Preventivo in PDF",
                     data=pdf_bytes,
-                    file_name=nome_file_pdf,
+                    file_name=nome_pdf,
                     mime="application/pdf",
                     type="primary",
                 )
 
                 st.divider()
-                col_m, col_d = st.columns(2)
+                col_m, col_d = st.columns((1.3, 0.7))
 
                 with col_m:
                     with st.expander("✏️ Modifica questo preventivo", expanded=False):
-                        with st.form("form_mod_prev"):
-                            m1, m2 = st.columns(2)
-                            m_num = m1.text_input("Numero", value=str(riga["num"]))
-                            m_data = m2.text_input("Data (AAAA-MM-GG)", value=str(riga["data_doc"]))
-                            m_cli = st.text_input("Cliente", value=str(riga["cliente"]))
-                            m3, m4 = st.columns(2)
-                            m_ind = m3.text_input("Indirizzo", value=str(riga.get("indirizzo") or ""))
-                            m_tel = m4.text_input("Telefono", value=str(riga.get("telefono") or ""))
-                            m_desc = st.text_area(
-                                "Voci (una per riga: Descrizione | Misure | Prezzo Unit. | Totale)",
-                                value=str(riga.get("descrizione") or ""),
-                                height=150,
-                            )
-                            m_imp = st.number_input("Totale Preventivo (€)", value=float(riga.get("importo") or 0.0), step=50.0)
+                        m1, m2 = st.columns(2)
+                        m_num = m1.text_input("Numero", value=str(riga["num"]), key=f"m_num_{id_sel}")
+                        m_data = m2.text_input("Data (AAAA-MM-GG)", value=str(riga["data_doc"]), key=f"m_data_{id_sel}")
+                        m_cli = st.text_input("Cliente", value=str(riga["cliente"]), key=f"m_cli_{id_sel}")
+                        m3, m4 = st.columns(2)
+                        m_ind = m3.text_input("Indirizzo", value=str(riga.get("indirizzo") or ""), key=f"m_ind_{id_sel}")
+                        m_tel = m4.text_input("Telefono", value=str(riga.get("telefono") or ""), key=f"m_tel_{id_sel}")
 
-                            if st.form_submit_button("💾 Salva Modifiche"):
-                                esegui_query(
-                                    """UPDATE preventivi 
-                                       SET num = :num, data_doc = :data_doc, cliente = :cliente, 
-                                           indirizzo = :indirizzo, telefono = :telefono, 
-                                           descrizione = :descrizione, importo = :importo 
-                                       WHERE id = :id""",
-                                    {
-                                        "num": m_num.strip(),
-                                        "data_doc": m_data.strip(),
-                                        "cliente": m_cli.strip(),
-                                        "indirizzo": m_ind.strip(),
-                                        "telefono": m_tel.strip(),
-                                        "descrizione": m_desc.strip(),
-                                        "importo": m_imp,
-                                        "id": id_sel,
-                                    },
-                                )
-                                st.success("✅ Preventivo aggiornato!")
-                                st.rerun()
+                        st.caption("Modifica i righi direttamente nella tabella (clicca '+' in basso per aggiungere righe):")
+                        df_mod_init = tabella_da_testo(riga.get("descrizione", ""))
+                        df_mod_edit = st.data_editor(
+                            df_mod_init,
+                            num_rows="dynamic",
+                            use_container_width=True,
+                            key=f"ed_mod_{id_sel}",
+                            column_config={
+                                "Descrizione": st.column_config.TextColumn("Descrizione Lavorazioni", width="large"),
+                                "Misure": st.column_config.TextColumn("Misure (es. 45 mq)", width="small"),
+                                "Prezzo Unit. (€)": st.column_config.NumberColumn("Prezzo Unit. (€)", min_value=0.0, step=1.0, format="%.2f"),
+                                "Totale (€)": st.column_config.NumberColumn("Totale (€)", min_value=0.0, step=1.0, format="%.2f"),
+                            },
+                        )
+
+                        m_desc_str, m_tot_calc = testo_da_tabella(df_mod_edit)
+                        m_imp = st.number_input(
+                            "Totale Preventivo (€)",
+                            value=float(m_tot_calc if m_tot_calc > 0 else (riga.get("importo") or 0.0)),
+                            step=50.0,
+                            key=f"m_imp_{id_sel}",
+                        )
+
+                        if st.button("💾 Salva Modifiche", type="primary", key=f"btn_save_mod_{id_sel}"):
+                            esegui_query(
+                                """UPDATE preventivi 
+                                   SET num = :num, data_doc = :data_doc, cliente = :cliente, 
+                                       indirizzo = :indirizzo, telefono = :telefono, 
+                                       descrizione = :descrizione, importo = :importo 
+                                   WHERE id = :id""",
+                                {
+                                    "num": m_num.strip(),
+                                    "data_doc": m_data.strip(),
+                                    "cliente": m_cli.strip(),
+                                    "indirizzo": m_ind.strip(),
+                                    "telefono": m_tel.strip(),
+                                    "descrizione": m_desc_str,
+                                    "importo": m_imp,
+                                    "id": id_sel,
+                                },
+                            )
+                            st.success("✅ Preventivo aggiornato!")
+                            st.rerun()
 
                 with col_d:
                     with st.expander("🗑️ Elimina questo preventivo", expanded=False):
                         st.warning(f"Vuoi eliminare il preventivo **n.{riga['num']}** per **{riga['cliente']}**?")
-                        if st.button("🚨 Conferma Eliminazione", type="primary"):
+                        if st.button("🚨 Conferma Eliminazione", type="primary", key=f"btn_del_{id_sel}"):
                             esegui_query("DELETE FROM preventivi WHERE id = :id", {"id": id_sel})
                             st.success("🗑️ Preventivo eliminato!")
                             st.rerun()
         else:
             st.info("Nessun preventivo salvato in archivio.")
-
     with tab2:
         st.subheader("➕ Crea Nuovo Preventivo (con Anteprima Live)")
         num_suggerito = genera_numero_progressivo(df_all)
 
-        col_form, col_live = st.columns([1, 1.15])
+        col_form, col_live = st.columns((1.15, 1.1))
 
         with col_form:
             c1, c2 = st.columns(2)
@@ -463,13 +524,32 @@ def mostra_preventivi():
             n_ind = c3.text_input("Indirizzo / Cantiere", placeholder="Es. Via Roma 10, Riposto")
             n_tel = c4.text_input("Telefono", placeholder="Es. 333 1234567")
 
-            st.caption("Formato righe: `Descrizione | Misure | Prezzo Unit. | Totale`")
-            n_desc = st.text_area(
-                "Descrizione Lavorazioni",
-                placeholder="Fornitura e posa pareti in cartongesso | 45 mq | € 35,00 | € 1.575,00\nTinteggiatura pareti interne | 120 mq | € 10,00 | € 1.200,00",
-                height=160,
+            st.markdown("**Righi Lavorazioni** *(inserisci i dati nelle celle; clicca sull'ultima riga vuota per aggiungerne altri)*")
+            df_vuoto = pd.DataFrame((
+                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+                {"Descrizione": "", "Misure": "", "Prezzo Unit. (€)": 0.0, "Totale (€)": 0.0},
+            ))
+            df_nuovo_edit = st.data_editor(
+                df_vuoto,
+                num_rows="dynamic",
+                use_container_width=True,
+                key="ed_nuovo_prev",
+                column_config={
+                    "Descrizione": st.column_config.TextColumn("Descrizione Lavorazioni", width="large"),
+                    "Misure": st.column_config.TextColumn("Misure (es. 45 mq)", width="small"),
+                    "Prezzo Unit. (€)": st.column_config.NumberColumn("Prezzo Unit. (€)", min_value=0.0, step=1.0, format="%.2f"),
+                    "Totale (€)": st.column_config.NumberColumn("Totale (€)", min_value=0.0, step=1.0, format="%.2f"),
+                },
             )
-            n_imp = st.number_input("Totale Preventivo (€)", min_value=0.0, value=0.0, step=50.0)
+
+            n_desc_str, tot_calcolato = testo_da_tabella(df_nuovo_edit)
+            n_imp = st.number_input(
+                "Totale Preventivo (€) — calcolato dai righi o modificabile",
+                min_value=0.0,
+                value=float(tot_calcolato),
+                step=50.0,
+            )
 
             b1, b2 = st.columns(2)
             with b1:
@@ -486,7 +566,7 @@ def mostra_preventivi():
                                 "cliente": n_cli.strip(),
                                 "indirizzo": n_ind.strip(),
                                 "telefono": n_tel.strip(),
-                                "descrizione": n_desc.strip(),
+                                "descrizione": n_desc_str,
                                 "importo": n_imp,
                             },
                         )
@@ -494,14 +574,13 @@ def mostra_preventivi():
                         st.rerun()
 
             with b2:
-                # Permette di scaricare subito il PDF anche prima di salvarlo
                 dati_bozza = {
                     "num": n_num,
                     "data_doc": str(n_data),
                     "cliente": n_cli or "Cliente",
                     "indirizzo": n_ind,
                     "telefono": n_tel,
-                    "descrizione": n_desc,
+                    "descrizione": n_desc_str,
                     "importo": n_imp,
                 }
                 pdf_bozza = genera_pdf_bytes(dati_bozza, percorso_logo)
@@ -521,8 +600,7 @@ def mostra_preventivi():
                 cliente=n_cli,
                 indirizzo=n_ind,
                 telefono=n_tel,
-                descrizione=n_desc,
+                descrizione=n_desc_str,
                 importo_val=n_imp,
             )
-
 
