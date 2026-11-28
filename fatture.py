@@ -83,7 +83,6 @@ def mostra_prima_nota():
     
     df_all = carica_tabella("fatture")
     
-    # Recupera elenco cantieri già usati
     cantieri_set = set(["GENERALE"])
     if not df_all.empty and "cantiere" in df_all.columns:
         cantieri_set.update(df_all["cantiere"].dropna().astype(str).str.upper().tolist())
@@ -129,7 +128,6 @@ def mostra_prima_nota():
             
             df_filtrato = df_all.copy()
             
-            # Filtro per tipo documento (gestisce sia vecchi che nuovi nomi)
             tipo_upper = df_filtrato["tipo"].astype(str).str.upper()
             if tipo_filtro == "Solo Emesse (Ricavi)":
                 df_filtrato = df_filtrato[tipo_upper.isin(["EMESSA", "FATTURA EMESSA"])]
@@ -178,6 +176,7 @@ def mostra_prima_nota():
                     for _, row in df_filtrato.iterrows()
                 }
                 id_scelto = st.selectbox("Scegli la fattura:", options=list(opzioni.keys()), format_func=lambda x: opzioni[x])
+                id_scelto = int(id_scelto)
                 riga = df_all.set_index("id").loc[id_scelto]
                 
                 col_mod, col_del = st.columns(2)
@@ -222,14 +221,14 @@ def mostra_prima_nota():
                                         nuovo_tipo,
                                         nuovo_num.strip(),
                                         nuova_anag.strip().upper(),
-                                        nuovo_imp,
-                                        nuova_iva,
-                                        nuova_rit,
+                                        float(nuovo_imp),
+                                        float(nuova_iva),
+                                        float(nuova_rit),
                                         nuovo_socio,
                                         nuova_cat,
                                         nuovo_cant.strip().upper() or "GENERALE",
                                         1 if nuova_pagata else 0,
-                                        id_scelto
+                                        int(id_scelto)
                                     )
                                 )
                                 st.success("✅ Fattura aggiornata con successo!")
@@ -239,11 +238,12 @@ def mostra_prima_nota():
                     with st.expander("🗑️ ELIMINA QUESTA FATTURA", expanded=False):
                         st.warning(f"Stai per eliminare definitivamente la fattura **n.{riga['num']}** di **{riga['anagrafica']}**.")
                         if st.button("🚨 Conferma Eliminazione", type="primary"):
-                            esegui_query("DELETE FROM fatture WHERE id=?", (id_scelto,))
+                            esegui_query("DELETE FROM fatture WHERE id=?", (int(id_scelto),))
                             st.success("🗑️ Fattura eliminata!")
                             st.rerun()
         else:
             st.info("Nessuna fattura registrata nel database.")
+
     with tab2:
         st.subheader("➕ Registra una Nuova Fattura")
         
@@ -289,16 +289,15 @@ def mostra_prima_nota():
                             ins_tipo,
                             ins_num.strip(),
                             ins_anag.strip().upper(),
-                            ins_imp,
-                            ins_iva,
-                            ins_rit,
+                            float(ins_imp),
+                            float(ins_iva),
+                            float(ins_rit),
                             ins_socio,
                             ins_cat,
                             ins_cant.strip().upper() or "GENERALE",
                             1 if ins_pagata else 0
                         )
                     )
-                    st.success("✅ Nuova fattura salvata nel database!")
+                    st.success("✅ Fattura registrata con successo!")
                     st.rerun()
-
 
