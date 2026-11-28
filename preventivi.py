@@ -1,3 +1,4 @@
+
 import os
 import io
 import base64
@@ -405,8 +406,6 @@ def testo_da_tabella(df_righe):
             linee.append(f"{desc} | {mis or '-'} | {pu_fmt} | {tot_fmt}")
 
     return "\n".join(linee), round(totale_gen, 2)
-
-
 def mostra_preventivi():
     st.title("📋 Gestione Preventivi")
     tab1, tab2, tab3 = st.tabs(("📂 Archivio, Anteprima & PDF", "➕ Nuovo Preventivo", "📚 Descrizioni Salvate"))
@@ -529,7 +528,8 @@ def mostra_preventivi():
                             st.success("🗑️ Preventivo eliminato!")
                             st.rerun()
         else:
-     with tab2:
+            st.info("Nessun preventivo salvato in archivio.")
+    with tab2:
         st.subheader("➕ Crea Nuovo Preventivo (con Anteprima Live)")
         num_suggerito = genera_numero_progressivo(df_all)
 
@@ -697,6 +697,4 @@ def mostra_preventivi():
                 st.rerun()
         else:
             st.info("Non hai ancora memorizzato nessuna descrizione. Usa il modulo qui sopra per aggiungere la prima!")
-           st.info("Nessun preventivo salvato in archivio.")
-
 
