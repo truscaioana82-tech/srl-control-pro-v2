@@ -31,7 +31,7 @@ def logo_in_base64():
         try:
             with open(percorso, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
-            ext = os.path.splitext(percorso)[1].lower().replace(".", "")
+            ext = os.path.splitext(percorso).lower().replace(".", "")
             if ext == "jpg":
                 ext = "jpeg"
             return f"data:image/{ext};base64,{b64}"
@@ -67,10 +67,10 @@ def renderizza_anteprima_preventivo(num_doc, data_doc, cliente, indirizzo, telef
         if len(parti) >= 4:
             righe_html += (
                 f"<tr>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;'>{parti[0]}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>{parti[1]}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti[2]}</td>"
-                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti[3]}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;'>{parti}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:center;'>{parti}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti}</td>"
+                f"<td style='padding:7px;border:1px solid #d0d7de;text-align:right;'>{parti}</td>"
                 f"</tr>"
             )
         else:
@@ -224,7 +224,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     badge_tab = Table(
         [[Paragraph(f"PREVENTIVO N. {num_doc}", s_badge_titolo)],
          [Paragraph(f"Data: {data_formattata}", s_badge_sub)]],
-        colWidths=[165]
+        colWidths=
     )
     badge_tab.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), BLU_LOGO),
@@ -233,7 +233,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
     ]))
 
-    header_tab = Table([[logo_cell, badge_tab]], colWidths=[370, 169])
+    header_tab = Table([[logo_cell, badge_tab]], colWidths=)
     header_tab.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (1, 0), (1, 0), "RIGHT"),
@@ -252,7 +252,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     cliente_tab = Table(
         [[Paragraph("SPETT.LE CLIENTE", s_spett_label)],
          [Paragraph(testo_cliente, s_spett_val)]],
-        colWidths=[539]
+        colWidths=
     )
     cliente_tab.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), BLU_CHIARO),
@@ -277,10 +277,10 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         parti = [p.strip() for p in riga.split("|")]
         if len(parti) >= 4:
             dati_tab.append([
-                Paragraph(parti[0], s_cell),
-                Paragraph(parti[1], s_cell_c),
-                Paragraph(parti[2], s_cell_r),
-                Paragraph(parti[3], s_cell_r),
+                Paragraph(parti, s_cell),
+                Paragraph(parti, s_cell_c),
+                Paragraph(parti, s_cell_r),
+                Paragraph(parti, s_cell_r),
             ])
         else:
             dati_tab.append([
@@ -296,7 +296,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
         Paragraph(importo_str, s_tot),
     ])
 
-    voci_tab = Table(dati_tab, colWidths=[284, 85, 85, 85], repeatRows=1)
+    voci_tab = Table(dati_tab, colWidths=, repeatRows=1)
     n_righe = len(dati_tab)
     voci_tab.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), BLU_LOGO),
@@ -315,7 +315,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
 
     cond_tab = Table(
         [[Paragraph("<b>NOTE E CONDIZIONI:</b> Gli importi indicati si intendono IVA esclusa ove applicabile. Validità offerta 30 giorni.", s_cond)]],
-        colWidths=[539]
+        colWidths=
     )
     cond_tab.setStyle(TableStyle([
         ("LINEBEFORE", (0, 0), (0, -1), 3, BLU_LOGO),
@@ -327,7 +327,7 @@ def genera_pdf_bytes(row_dict, percorso_logo):
     footer_tab = Table(
         [[Paragraph("<b>CARTONGESSO &amp; COLOR GROUP S.r.l.</b><br/>Opere in Cartongesso, Controsoffitti e Tinteggiature", s_f_sx),
           Paragraph("Timbro e Firma per Accettazione<br/><br/>______________________________", s_f_dx)]],
-        colWidths=[270, 269]
+        colWidths=
     )
     footer_tab.setStyle(TableStyle([
         ("LINEABOVE", (0, 0), (-1, 0), 0.8, GRIGIO_BORDO),
@@ -374,7 +374,7 @@ def mostra_preventivi():
                 id_sel = st.selectbox("Seleziona preventivo:", options=list(opzioni.keys()), format_func=lambda x: opzioni[x])
                 riga = df_all.set_index("id").loc[id_sel]
 
-                # Anteprima visiva sempre aggiornata
+                # Anteprima visiva
                 st.markdown("### 👁️ Anteprima Documento")
                 renderizza_anteprima_preventivo(
                     num_doc=riga["num"],
@@ -386,7 +386,7 @@ def mostra_preventivi():
                     importo_val=riga.get("importo", 0.0),
                 )
 
-                # Pulsante download PDF
+                # Download PDF
                 pdf_bytes = genera_pdf_bytes(riga.to_dict(), percorso_logo)
                 nome_file_pdf = f"Preventivo_{str(riga['num']).replace('/', '_')}_{str(riga['cliente']).replace(' ', '_')}.pdf"
                 st.download_button(
@@ -419,8 +419,21 @@ def mostra_preventivi():
 
                             if st.form_submit_button("💾 Salva Modifiche"):
                                 esegui_query(
-                                    """UPDATE preventivi SET num=?, data_doc=?, cliente=?, indirizzo=?, telefono=?, descrizione=?, importo=? WHERE id=?""",
-                                    (m_num.strip(), m_data.strip(), m_cli.strip(), m_ind.strip(), m_tel.strip(), m_desc.strip(), m_imp, id_sel),
+                                    """UPDATE preventivi 
+                                       SET num = :num, data_doc = :data_doc, cliente = :cliente, 
+                                           indirizzo = :indirizzo, telefono = :telefono, 
+                                           descrizione = :descrizione, importo = :importo 
+                                       WHERE id = :id""",
+                                    {
+                                        "num": m_num.strip(),
+                                        "data_doc": m_data.strip(),
+                                        "cliente": m_cli.strip(),
+                                        "indirizzo": m_ind.strip(),
+                                        "telefono": m_tel.strip(),
+                                        "descrizione": m_desc.strip(),
+                                        "importo": m_imp,
+                                        "id": id_sel,
+                                    },
                                 )
                                 st.success("✅ Preventivo aggiornato!")
                                 st.rerun()
@@ -429,7 +442,7 @@ def mostra_preventivi():
                     with st.expander("🗑️ Elimina questo preventivo", expanded=False):
                         st.warning(f"Vuoi eliminare il preventivo **n.{riga['num']}** per **{riga['cliente']}**?")
                         if st.button("🚨 Conferma Eliminazione", type="primary"):
-                            esegui_query("DELETE FROM preventivi WHERE id=?", (id_sel,))
+                            esegui_query("DELETE FROM preventivi WHERE id = :id", {"id": id_sel})
                             st.success("🗑️ Preventivo eliminato!")
                             st.rerun()
         else:
@@ -458,17 +471,47 @@ def mostra_preventivi():
             )
             n_imp = st.number_input("Totale Preventivo (€)", min_value=0.0, value=0.0, step=50.0)
 
-            if st.button("💾 Salva Preventivo in Archivio", type="primary", use_container_width=True):
-                if not n_cli.strip():
-                    st.error("⚠️ Inserisci almeno il nome del cliente.")
-                else:
-                    esegui_query(
-                        """INSERT INTO preventivi (num, data_doc, cliente, indirizzo, telefono, descrizione, importo)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                        (n_num.strip(), str(n_data), n_cli.strip(), n_ind.strip(), n_tel.strip(), n_desc.strip(), n_imp),
-                    )
-                    st.success("✅ Preventivo salvato con successo!")
-                    st.rerun()
+            b1, b2 = st.columns(2)
+            with b1:
+                if st.button("💾 Salva in Archivio", type="primary", use_container_width=True):
+                    if not n_cli.strip():
+                        st.error("⚠️ Inserisci almeno il nome del cliente.")
+                    else:
+                        esegui_query(
+                            """INSERT INTO preventivi (num, data_doc, cliente, indirizzo, telefono, descrizione, importo)
+                               VALUES (:num, :data_doc, :cliente, :indirizzo, :telefono, :descrizione, :importo)""",
+                            {
+                                "num": n_num.strip(),
+                                "data_doc": str(n_data),
+                                "cliente": n_cli.strip(),
+                                "indirizzo": n_ind.strip(),
+                                "telefono": n_tel.strip(),
+                                "descrizione": n_desc.strip(),
+                                "importo": n_imp,
+                            },
+                        )
+                        st.success("✅ Preventivo salvato con successo!")
+                        st.rerun()
+
+            with b2:
+                # Permette di scaricare subito il PDF anche prima di salvarlo
+                dati_bozza = {
+                    "num": n_num,
+                    "data_doc": str(n_data),
+                    "cliente": n_cli or "Cliente",
+                    "indirizzo": n_ind,
+                    "telefono": n_tel,
+                    "descrizione": n_desc,
+                    "importo": n_imp,
+                }
+                pdf_bozza = genera_pdf_bytes(dati_bozza, percorso_logo)
+                st.download_button(
+                    label="📥 Scarica PDF Subito",
+                    data=pdf_bozza,
+                    file_name=f"Preventivo_{n_num.replace('/', '_')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
 
         with col_live:
             st.markdown("#### 👁️ Anteprima in Tempo Reale")
