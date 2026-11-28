@@ -89,13 +89,16 @@ if mesi_target is not None:
     if not df_stipendi.empty:
         df_stipendi = df_stipendi[df_stipendi['data'].astype(str).str.slice(5, 7).isin(mesi_target)]
 def calcola_scheda(df_f, df_s):
+    chiavi_vuote = {
+        "lordi": 0.0, "utile": 0.0, "fornitori": 0.0,
+        "spese_materiali": 0.0, "spese_carburante": 0.0, "spese_consulenza": 0.0,
+        "spese_noleggi": 0.0, "spese_telefonia": 0.0, "spese_indumenti": 0.0,
+        "spese_utenze": 0.0, "spese_assicurazioni": 0.0, "spese_altre": 0.0,
+        "dipendenti": 0.0, "cassa_edile": 0.0, "nc": 0.0,
+        "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0
+    }
     if df_f.empty and df_s.empty:
-        return {
-            "lordi": 0.0, "utile": 0.0, "fornitori": 0.0,
-            "spese_materiali": 0.0, "spese_carburante": 0.0, "spese_altre": 0.0,
-            "dipendenti": 0.0, "cassa_edile": 0.0, "nc": 0.0,
-            "iva_deb": 0.0, "iva_cred": 0.0, "liq_iva": 0.0
-        }
+        return chiavi_vuote
 
     t_up = df_f['tipo'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
     cat_up = df_f['costo_categoria'].astype(str).str.upper() if not df_f.empty else pd.Series(dtype=str)
@@ -116,17 +119,33 @@ def calcola_scheda(df_f, df_s):
     spese_fornitori = f_forn['imponibile'].sum() if not f_forn.empty else 0.0
 
     if not f_forn.empty and 'costo_categoria' in f_forn.columns:
-        cat_forn = f_forn['costo_categoria'].fillna("").astype(str).str.upper().str.strip()
-        mask_carb = cat_forn.str.contains('CARBURANT|GASOLIO|BENZINA|ENI|Q8|IP|ESSO|TAMOIL', na=False)
-        mask_altre_cat = cat_forn.str.contains('CONSULENZ|NOLEGG|NOLLEG|TELEFON|INDUMENT|DPI|UTENZ|ASSICURAZ', na=False)
-        mask_mat = (cat_forn.str.contains('MATERIAL|EDIL', na=False) | (~mask_carb & ~mask_altre_cat & (cat_forn == ""))) & ~mask_carb
-        spese_carburante = f_forn.loc[mask_carb, 'imponibile'].sum()
-        spese_materiali = f_forn.loc[mask_mat, 'imponibile'].sum()
-        spese_altre = spese_fornitori - spese_materiali - spese_carburante
+        cat_f = f_forn['costo_categoria'].fillna("").astype(str).str.upper().str.strip()
+        m_carb = cat_f.str.contains('CARBURANT|GASOLIO|BENZINA|ENI|Q8|IP|ESSO|TAMOIL', na=False)
+        m_cons = cat_f.str.contains('CONSULENZ|COMMERCIALIST|NOTAIO|AVVOCAT|PROFESSION', na=False) & ~m_carb
+        m_nol = cat_f.str.contains('NOLEGG|NOLLEG', na=False) & ~m_carb & ~m_cons
+        m_tel = cat_f.str.contains('TELEFON|TIM|VODAFONE|WIND|FASTWEB|ILIAD', na=False) & ~m_carb & ~m_cons & ~m_nol
+        m_ind = cat_f.str.contains('INDUMENT|DPI|ABBIGLIAMENT|SCARPE', na=False) & ~m_carb & ~m_cons & ~m_nol & ~m_tel
+        m_ute = cat_f.str.contains('UTENZ|LUCE|GAS|ENEL|ENERGIA|ACQUA', na=False) & ~m_carb & ~m_cons & ~m_nol & ~m_tel & ~m_ind
+        m_ass = cat_f.str.contains('ASSICURAZ|POLIZZ|UNIPOL|ALLIANZ|GENERALI', na=False) & ~m_carb & ~m_cons & ~m_nol & ~m_tel & ~m_ind & ~m_ute
+        m_altre_esplicite = cat_f.str.contains('ALTRE|VARIE|ALTRO', na=False) & ~m_carb & ~m_cons & ~m_nol & ~m_tel & ~m_ind & ~m_ute & ~m_ass
+        m_mat = (cat_f.str.contains('MATERIAL|EDIL', na=False) | cat_f.isin(("", "GENERALE", "NAN", "NONE"))) & ~m_carb & ~m_cons & ~m_nol & ~m_tel & ~m_ind & ~m_ute & ~m_ass & ~m_altre_esplicite
+
+        spese_carburante = f_forn.loc[m_carb, 'imponibile'].sum()
+        spese_consulenza = f_forn.loc[m_cons, 'imponibile'].sum()
+        spese_noleggi = f_forn.loc[m_nol, 'imponibile'].sum()
+        spese_telefonia = f_forn.loc[m_tel, 'imponibile'].sum()
+        spese_indumenti = f_forn.loc[m_ind, 'imponibile'].sum()
+        spese_utenze = f_forn.loc[m_ute, 'imponibile'].sum()
+        spese_assicurazioni = f_forn.loc[m_ass, 'imponibile'].sum()
+        spese_materiali = f_forn.loc[m_mat, 'imponibile'].sum()
+        spese_altre = max(0.0, spese_fornitori - (
+            spese_materiali + spese_carburante + spese_consulenza + spese_noleggi +
+            spese_telefonia + spese_indumenti + spese_utenze + spese_assicurazioni
+        ))
     else:
-        spese_materiali = 0.0
-        spese_carburante = 0.0
-        spese_altre = spese_fornitori
+        spese_materiali = spese_fornitori
+        spese_carburante = spese_consulenza = spese_noleggi = 0.0
+        spese_telefonia = spese_indumenti = spese_utenze = spese_assicurazioni = spese_altre = 0.0
 
     ce_nuova = df_s['cassa_edile'].fillna(0.0).sum() if (not df_s.empty and 'cassa_edile' in df_s.columns) else 0.0
     dip_vecchi = f_dip_v['imponibile'].sum() if not f_dip_v.empty else 0.0
@@ -142,10 +161,30 @@ def calcola_scheda(df_f, df_s):
 
     return {
         "lordi": incassi_lordi, "utile": utile_netto, "fornitori": spese_fornitori,
-        "spese_materiali": spese_materiali, "spese_carburante": spese_carburante, "spese_altre": spese_altre,
-        "dipendenti": tot_dipendenti, "cassa_edile": ce_nuova, "nc": note_credito, "iva_deb": iva_deb,
-        "iva_cred": iva_cred, "liq_iva": liq_iva
+        "spese_materiali": spese_materiali, "spese_carburante": spese_carburante,
+        "spese_consulenza": spese_consulenza, "spese_noleggi": spese_noleggi,
+        "spese_telefonia": spese_telefonia, "spese_indumenti": spese_indumenti,
+        "spese_utenze": spese_utenze, "spese_assicurazioni": spese_assicurazioni,
+        "spese_altre": spese_altre,
+        "dipendenti": tot_dipendenti, "cassa_edile": ce_nuova, "nc": note_credito,
+        "iva_deb": iva_deb, "iva_cred": iva_cred, "liq_iva": liq_iva
     }
+def _formatta_riepilogo_spese(d):
+    voci = (
+        ("🧱 Materiali", d.get("spese_materiali", 0.0)),
+        ("⛽ Carburante", d.get("spese_carburante", 0.0)),
+        ("💼 Consulenza", d.get("spese_consulenza", 0.0)),
+        ("🚜 Noleggi", d.get("spese_noleggi", 0.0)),
+        ("📞 Telefonia", d.get("spese_telefonia", 0.0)),
+        ("🦺 Indumenti", d.get("spese_indumenti", 0.0)),
+        ("💡 Utenze", d.get("spese_utenze", 0.0)),
+        ("🛡️ Assicurazioni", d.get("spese_assicurazioni", 0.0)),
+        ("📦 Altre", d.get("spese_altre", 0.0)),
+    )
+    attive = [f"{nome}: € {val:,.2f}" for nome, val in voci if val > 0]
+    return " • ".join(attive) if attive else "Nessuna spesa registrata"
+
+
 if menu == "📊 Cruscotto & Bilancio":
     st.subheader(f"📊 Cruscotto SRL • {periodo_scelto} ({anno_filtro})")
 
@@ -204,12 +243,7 @@ if menu == "📊 Cruscotto & Bilancio":
     c2.metric("📈 Utile Netto SRL", f"€ {tot['utile']:,.2f}")
     c3.metric("🧾 Liquidazione IVA SRL", f"€ {abs(tot['liq_iva']):,.2f}", "A Credito" if tot['liq_iva'] >= 0 else "A Debito")
 
-    st.caption(
-        f"**Spese Fornitori SRL (€ {tot['fornitori']:,.2f}):** "
-        f"🧱 Materiali: € {tot['spese_materiali']:,.2f} • "
-        f"⛽ Carburante: € {tot['spese_carburante']:,.2f} • "
-        f"📦 Altre Spese: € {tot['spese_altre']:,.2f}"
-    )
+    st.caption(f"**Spese Fornitori SRL (€ {tot['fornitori']:,.2f}):** {_formatta_riepilogo_spese(tot)}")
 
     st.divider()
     col_b, col_t = st.columns(2)
@@ -222,11 +256,7 @@ if menu == "📊 Cruscotto & Bilancio":
             m3, m4 = st.columns(2)
             m3.metric("🏭 Spese Fornitori", f"€ {d['fornitori']:,.2f}")
             m4.metric("👷 Costo Personale", f"€ {d['dipendenti']:,.2f}")
-            st.caption(
-                f"🧱 Materiali: € {d['spese_materiali']:,.2f} • "
-                f"⛽ Carburante: € {d['spese_carburante']:,.2f} • "
-                f"📦 Altre Spese: € {d['spese_altre']:,.2f}"
-            )
+            st.caption(_formatta_riepilogo_spese(d))
             if d['cassa_edile'] > 0:
                 st.caption(f"di cui Cassa Edile: € {d['cassa_edile']:,.2f}")
 
