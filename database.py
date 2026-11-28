@@ -1,3 +1,4 @@
+import re
 import time
 import streamlit as st
 import pandas as pd
@@ -131,8 +132,33 @@ def _mappa_tabella(nome):
 
 
 def esegui_query(query, params=None):
-    for vecchia, nuova in (("fatture", "fatture_v2"), ("stipendi", "stipendi_v2"), ("f24", "f24_v2"), ("preventivi", "preventivi_cloud"), ("listino", "listino_cloud")):
-        query = query.replace(f" {vecchia} ", f" {nuova} ").replace(f" {vecchia}\n", f" {nuova}\n")
+    # Sostituisce in modo sicuro i vecchi nomi delle tabelle ovunque nella query
+    mappa_tabelle = {
+        "fatture": "fatture_v2",
+        "stipendi": "stipendi_v2",
+        "f24": "f24_v2",
+        "preventivi": "preventivi_cloud",
+        "listino": "listino_cloud"
+    }
+    for vecchia, nuova in mappa_tabelle.items():
+        query = re.sub(rf"\b{vecchia}\b", nuova, query)
+
+    # Converte automaticamente vecchie query SQLite con '?' e tuple/liste in dizionari per SQLAlchemy 2.0
+    if isinstance(params, (tuple, list)):
+        parti = query.split("?")
+        if len(parti) - 1 == len(params):
+            nuova_query = parti[0]
+            nuovi_params = {}
+            for i, val in enumerate(params):
+                chiave = f"p_{i}"
+                # Converte eventuali numeri NumPy (es. np.int64) in tipi standard Python
+                if hasattr(val, "item"):
+                    val = val.item()
+                nuova_query += f":{chiave}" + parti[i + 1]
+                nuovi_params[chiave] = val
+            query = nuova_query
+            params = nuovi_params
+
     for tentativo in range(2):
         try:
             engine = get_engine()
